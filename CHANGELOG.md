@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Text tracks are subtitle streams: a QuickTime `text` or 3GPP `tx3g`
+  entry on a `text`, `subt` or `sbtl` handler is a `mov_text` subtitle
+  stream (FFmpeg's `ff_codec_movsubtitle_tags`) whose extradata is the
+  entry after its 16-byte header; a text track a `tref/chap` points at
+  stays a data stream, as FFmpeg's chapter tracks do.
+
 ## [0.0.6](https://github.com/OxideAV/oxideav-mov/compare/v0.0.5...v0.0.6) - 2026-10-04
 
 ### Other
