@@ -3375,12 +3375,23 @@ fn hex_digit(b: u8) -> Option<u8> {
 
 #[cfg(feature = "registry")]
 fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamInfo> {
+    // A text track that a `tref/chap` points at holds chapter titles:
+    // FFmpeg's `mov_read_chapters` makes it a data stream.
+    let chapters: Vec<u32> = tracks.iter().filter_map(Track::chapter_track_ref).collect();
     let mut out = Vec::with_capacity(tracks.len());
     for (i, t) in tracks.iter().enumerate() {
+        // QuickTime `text` and 3GPP `tx3g` entries are both `mov_text`
+        // (FFmpeg `isom.c` `ff_codec_movsubtitle_tags`), on a `text`,
+        // `subt` or `sbtl` handler.
+        let subtitle = (t.is_text() || t.is_subtitle())
+            && matches!(&t.primary_format(), Some(f) if f == b"text" || f == b"tx3g")
+            && !chapters.contains(&t.tkhd.track_id);
         let mut params = if t.is_video() {
             CodecParameters::video(CodecId::new("unknown"))
         } else if t.is_audio() {
             CodecParameters::audio(CodecId::new("unknown"))
+        } else if subtitle {
+            CodecParameters::subtitle(CodecId::new("mov_text"))
         } else {
             CodecParameters::data(CodecId::new("unknown"))
         };
@@ -3398,8 +3409,10 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                     ctx = ctx.width(desc.width as u32).height(desc.height as u32);
                 }
             }
-            if let Some(id) = resolver.resolve_tag(&ctx) {
-                params.codec_id = id;
+            if !subtitle {
+                if let Some(id) = resolver.resolve_tag(&ctx) {
+                    params.codec_id = id;
+                }
             }
             params = params.with_tag(tag);
             if t.is_audio() {
@@ -3433,6 +3446,12 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                     if !desc.extra.is_empty() {
                         params.extradata = desc.extra.clone();
                     }
+                }
+            } else if subtitle {
+                // The entry after its universal 16-byte header, as FFmpeg's
+                // `mov_parse_stsd_subtitle` reads it into extradata.
+                if let Some(desc) = t.sample_descriptions.first() {
+                    params.extradata = desc.extra.clone();
                 }
             }
         }
