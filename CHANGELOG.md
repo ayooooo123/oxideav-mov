@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Linear PCM sound entries play: the demuxer gives them the codec FFmpeg's
-  MOV demuxer does (`twos`, `sowt`, `in24`/`42ni`, `in32`/`23ni`, `fl32`,
-  `fl64`, `raw `/`NONE`, format 0, the bit depth, a little-endian `enda`,
-  and version 2 `lpcm` by its format flags), where they resolved to
-  `unknown` (no decoder claims these formats).
+- Linear PCM and G.711 sound entries play: the demuxer gives them the
+  codec FFmpeg's MOV demuxer does (`twos`, `sowt`, `in24`/`42ni`,
+  `in32`/`23ni`, `fl32`, `fl64`, `raw `/`NONE`, format 0, `alaw`, `ulaw`,
+  the bit depth, a little-endian `enda`, and version 2 `lpcm` by its format
+  flags), where they resolved to `unknown` (no decoder claims these
+  formats).
 - Text tracks are subtitle streams: a QuickTime `text` or 3GPP `tx3g`
   entry on a `text`, `subt` or `sbtl` handler is a `mov_text` subtitle
   stream (FFmpeg's `ff_codec_movsubtitle_tags`) whose extradata is the

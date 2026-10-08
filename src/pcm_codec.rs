@@ -14,13 +14,13 @@
 // It is distributed WITHOUT ANY WARRANTY; without even the implied warranty
 // of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE-LGPL.
 
-//! FFmpeg's MOV demuxer, not a decoder's tag claim, decides which linear PCM
-//! a QuickTime sound entry holds, and so does this demuxer:
+//! FFmpeg's MOV demuxer, not a decoder's tag claim, decides which PCM a
+//! QuickTime sound entry holds, and so does this demuxer:
 //! - the format's codec: `twos` signed 16-bit big-endian, `sowt` little-
 //!   endian, `in24`/`in32` signed 24/32-bit big-endian (`42ni`/`23ni`
 //!   little-endian), `fl32`/`fl64` big-endian float, `raw `/`NONE` unsigned
 //!   8-bit, format 0 `raw ` at 8 bits and `twos` at 16, `lpcm` big-endian
-//!   16-bit;
+//!   16-bit, `alaw`/`ulaw` G.711;
 //! - a version 2 `lpcm` entry by its format-specific flags (1 float, 2
 //!   big-endian, 4 signed integer) and bits per channel;
 //! - the entry's bit depth: 8-bit `twos`/`sowt` are signed 8-bit, 24 and
@@ -31,8 +31,8 @@
 
 use crate::track::SampleDescription;
 
-/// The linear PCM codec id FFmpeg's MOV demuxer gives the sound entry
-/// `desc`; None for an entry of another codec.
+/// The PCM codec id FFmpeg's MOV demuxer gives the sound entry `desc`;
+/// None for an entry of another codec.
 pub(crate) fn pcm_codec_id(desc: &SampleDescription) -> Option<&'static str> {
     let bits = desc.bits_per_sample;
     let mut id = match &desc.format {
@@ -45,6 +45,8 @@ pub(crate) fn pcm_codec_id(desc: &SampleDescription) -> Option<&'static str> {
         b"fl32" => "pcm_f32be",
         b"fl64" => "pcm_f64be",
         b"raw " | b"NONE" => "pcm_u8",
+        b"alaw" => "pcm_alaw",
+        b"ulaw" => "pcm_mulaw",
         b"\0\0\0\0" => match bits {
             8 => "pcm_u8",
             16 => "pcm_s16be",

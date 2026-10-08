@@ -1,7 +1,7 @@
-//! Linear PCM sound entries get the codec FFmpeg 2da55bf's MOV demuxer
-//! gives them (mov.c: the `ff_codec_movaudio_tags` format, the version 2
-//! `lpcm` flags, the bit depth, a little-endian `enda`), with no registry
-//! claim on the format, so the PCM decoders play them.
+//! Linear PCM and G.711 sound entries get the codec FFmpeg 2da55bf's MOV
+//! demuxer gives them (mov.c: the `ff_codec_movaudio_tags` format, the
+//! version 2 `lpcm` flags, the bit depth, a little-endian `enda`), with no
+//! registry claim on the format, so the PCM and G.711 decoders play them.
 #![cfg(feature = "registry")]
 
 mod common;
@@ -107,6 +107,8 @@ fn version_0_formats_by_their_bit_depth() {
         (b"fl64", 64, "pcm_f64be"),
         (&[0; 4], 8, "pcm_u8"),
         (&[0; 4], 16, "pcm_s16be"),
+        (b"alaw", 16, "pcm_alaw"),
+        (b"ulaw", 16, "pcm_mulaw"),
     ] {
         assert_eq!(codec(entry(format, 0, bits, &[])), want, "{} at {bits} bits", String::from_utf8_lossy(format));
     }
