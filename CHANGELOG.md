@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1-byte entry was its own packet and reading failed past the end of
   the data. The port is LGPL-2.1-or-later (`src/sound_chunks.rs`, see
   `LICENSE-LGPL`); the crate's license is now `MIT AND LGPL-2.1-or-later`.
+- Grouped sound tracks count against the open-time sample bound before
+  any of them is built: each track's packets are counted from its tables,
+  and the total is checked first. Before, each track was built up to the
+  bound on its own before the total was checked, so a small file with
+  many sound tracks took memory per track (320 MB for a 2.9 KB file with
+  8 tracks).
 
 ## [0.0.6](https://github.com/OxideAV/oxideav-mov/compare/v0.0.5...v0.0.6) - 2026-10-04
 

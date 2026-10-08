@@ -101,26 +101,26 @@ fn framing(t: &Track) -> Framing {
     Framing { samples_per_frame: spf, bytes_per_frame: bpf, sample_size }
 }
 
-/// The packets FFmpeg reads from `t`, if FFmpeg groups its samples by chunk
-/// (an audio track whose `stts` is one entry of duration 1); at most
-/// `max_entries` (none when there would be more).
-pub(crate) fn grouped_samples(t: &Track, max_entries: u64) -> Option<Vec<SampleEntry>> {
+/// How many packets FFmpeg reads from `t`, if FFmpeg groups its samples by
+/// chunk (an audio track whose `stts` is one entry of duration 1). Counted
+/// from the tables alone, so the open-time bound covers every track before
+/// any packet is built.
+pub(crate) fn grouped_count(t: &Track) -> Option<u32> {
     let table = &t.sample_table;
     if !t.is_audio() || table.stts.len() != 1 || table.stts[0].sample_duration != 1 {
         return None;
     }
     let chunk_count = table.chunk_offsets.len() as u32;
     if chunk_count == 0 || table.stsc.is_empty() {
-        return Some(Vec::new());
+        return Some(0);
     }
-    let Framing { samples_per_frame: spf, bytes_per_frame: bpf, sample_size } = framing(t);
-
+    let spf = framing(t).samples_per_frame;
     // The packet count, in FFmpeg's unsigned arithmetic.
     let mut total: u32 = 0;
     for (i, e) in table.stsc.iter().enumerate() {
         let chunk_samples = e.samples_per_chunk;
         if i != table.stsc.len() - 1 && spf != 0 && chunk_samples % spf != 0 {
-            return Some(Vec::new()); // "error unaligned chunk"
+            return Some(0); // "error unaligned chunk"
         }
         let count = if spf >= 160 {
             chunk_samples / spf
@@ -136,14 +136,24 @@ pub(crate) fn grouped_samples(t: &Track, max_entries: u64) -> Option<Vec<SampleE
         };
         total = total.wrapping_add(chunks.wrapping_mul(count));
     }
-    if u64::from(total) >= u64::from(u32::MAX) / 24 || u64::from(total) > max_entries {
-        return Some(Vec::new());
-    }
+    // FFmpeg's limit: the index's 24-byte entries must fit a 32-bit size.
+    Some(if u64::from(total) >= u64::from(u32::MAX) / 24 { 0 } else { total })
+}
 
-    let mut out: Vec<SampleEntry> = Vec::with_capacity(total as usize);
+/// Appends the `total` packets [`grouped_count`] counted for `t` to `out`,
+/// as stream `track`'s.
+pub(crate) fn push_grouped(t: &Track, total: u32, track: u32, out: &mut Vec<(u32, SampleEntry)>) {
+    let table = &t.sample_table;
+    let Framing { samples_per_frame: spf, bytes_per_frame: bpf, sample_size } = framing(t);
+    let chunk_count = table.chunk_offsets.len() as u32;
+    let start = out.len();
+    let mut pushed: u32 = 0;
     let mut stsc_index = 0usize;
     let mut dts: u64 = 0;
     'chunks: for i in 0..chunk_count {
+        if pushed >= total {
+            break;
+        }
         let mut offset = table.chunk_offsets[i as usize];
         if table.stsc.get(stsc_index + 1).is_some_and(|next| i + 1 == next.first_chunk) {
             stsc_index += 1;
@@ -163,19 +173,23 @@ pub(crate) fn grouped_samples(t: &Track, max_entries: u64) -> Option<Vec<SampleE
                 let samples = chunk_samples.min(1024);
                 (samples, samples.wrapping_mul(sample_size))
             };
-            if out.len() >= total as usize || size > 0x3FFF_FFFF {
+            if pushed >= total || size > 0x3FFF_FFFF {
                 break 'chunks; // "wrong chunk count", "Sample size too large"
             }
-            out.push(SampleEntry {
-                index: out.len() as u32,
-                offset,
-                size,
-                dts,
-                duration: samples,
-                sample_description_id: entry.sample_description_id,
-                keyframe: true,
-                composition_offset: 0,
-            });
+            out.push((
+                track,
+                SampleEntry {
+                    index: pushed,
+                    offset,
+                    size,
+                    dts,
+                    duration: samples,
+                    sample_description_id: entry.sample_description_id,
+                    keyframe: true,
+                    composition_offset: 0,
+                },
+            ));
+            pushed += 1;
             offset = offset.saturating_add(u64::from(size));
             dts += u64::from(samples);
             chunk_samples = chunk_samples.wrapping_sub(samples);
@@ -184,11 +198,10 @@ pub(crate) fn grouped_samples(t: &Track, max_entries: u64) -> Option<Vec<SampleE
     // A packet lasts until the next one starts, the last until the end of
     // the media (FFmpeg's mov_read_packet, edit lists ignored).
     let mut until = t.mdhd.duration;
-    for e in out.iter_mut().rev() {
+    for (_, e) in out[start..].iter_mut().rev() {
         e.duration = until.checked_sub(e.dts).map_or(0, |d| u32::try_from(d).unwrap_or(u32::MAX));
         until = e.dts;
     }
-    Some(out)
 }
 
 #[cfg(test)]

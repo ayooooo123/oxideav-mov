@@ -1064,16 +1064,16 @@ impl MovDemuxer {
         // live in external files (non-self `dref`) still opens.
         //
         // Sound tracks FFmpeg reads per chunk (`sound_chunks`) count
-        // their packets, not the 1-byte samples of their tables.
+        // their packets, not the 1-byte samples of their tables; they are
+        // counted here, from the tables, before any track's are built.
         let max_samples = total_len.max(1 << 20);
-        let grouped: Vec<Option<Vec<SampleEntry>>> =
-            tracks.iter().map(|t| crate::sound_chunks::grouped_samples(t, max_samples)).collect();
+        let grouped: Vec<Option<u32>> = tracks.iter().map(crate::sound_chunks::grouped_count).collect();
         let declared: u64 = tracks
             .iter()
             .zip(&grouped)
             .map(|(t, g)| {
                 let table = match g {
-                    Some(g) => g.len() as u64,
+                    Some(n) => u64::from(*n),
                     None => t.sample_table.sample_count() as u64,
                 };
                 table.saturating_add(t.fragment_samples.len() as u64)
@@ -1094,7 +1094,7 @@ impl MovDemuxer {
         let mut samples: Vec<(u32, SampleEntry)> = Vec::new();
         for ((track_idx, t), grouped) in tracks.iter().enumerate().zip(grouped) {
             match grouped {
-                Some(entries) => samples.extend(entries.into_iter().map(|s| (track_idx as u32, s))),
+                Some(total) => crate::sound_chunks::push_grouped(t, total, track_idx as u32, &mut samples),
                 None => {
                     for sample in t.sample_table.iter_samples() {
                         let s = sample?;
