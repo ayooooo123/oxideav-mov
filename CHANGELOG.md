@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stream (FFmpeg's `ff_codec_movsubtitle_tags`) whose extradata is the
   entry after its 16-byte header; a text track a `tref/chap` points at
   stays a data stream, as FFmpeg's chapter tracks do.
+- QuickTime sound read per chunk, as FFmpeg's `mov_build_index` does:
+  tables that count one entry per sample (`stts` of one duration of 1,
+  1-byte `stsz` sizes, as MACE, IMA4, QDesign, GSM and PCM tracks are
+  written) become packets of whole frames, `samplesPerPacket` samples
+  and `bytesPerFrame` bytes each (fixed sizes for MACE 3:1 and 6:1,
+  IMA4, GSM and QCELP), up to 1024 samples per packet. Before, each
+  1-byte entry was its own packet and reading failed past the end of
+  the data. The port is LGPL-2.1-or-later (`src/sound_chunks.rs`, see
+  `LICENSE-LGPL`); the crate's license is now `MIT AND LGPL-2.1-or-later`.
 
 ## [0.0.6](https://github.com/OxideAV/oxideav-mov/compare/v0.0.5...v0.0.6) - 2026-10-04
 

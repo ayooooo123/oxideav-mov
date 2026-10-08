@@ -1062,14 +1062,23 @@ impl MovDemuxer {
         // input, so `total_len` bounds any plausible total; keep a
         // generous floor so a small reference movie whose samples
         // live in external files (non-self `dref`) still opens.
+        //
+        // Sound tracks FFmpeg reads per chunk (`sound_chunks`) count
+        // their packets, not the 1-byte samples of their tables.
+        let max_samples = total_len.max(1 << 20);
+        let grouped: Vec<Option<Vec<SampleEntry>>> =
+            tracks.iter().map(|t| crate::sound_chunks::grouped_samples(t, max_samples)).collect();
         let declared: u64 = tracks
             .iter()
-            .map(|t| {
-                (t.sample_table.sample_count() as u64)
-                    .saturating_add(t.fragment_samples.len() as u64)
+            .zip(&grouped)
+            .map(|(t, g)| {
+                let table = match g {
+                    Some(g) => g.len() as u64,
+                    None => t.sample_table.sample_count() as u64,
+                };
+                table.saturating_add(t.fragment_samples.len() as u64)
             })
             .fold(0u64, u64::saturating_add);
-        let max_samples = total_len.max(1 << 20);
         if declared > max_samples {
             return Err(Error::invalid(format!(
                 "MOV: sample tables declare {declared} samples but the \
@@ -1083,10 +1092,15 @@ impl MovDemuxer {
         // `fragment_samples` carries the actual data; both sources
         // contribute to the flat queue.
         let mut samples: Vec<(u32, SampleEntry)> = Vec::new();
-        for (track_idx, t) in tracks.iter().enumerate() {
-            for sample in t.sample_table.iter_samples() {
-                let s = sample?;
-                samples.push((track_idx as u32, s));
+        for ((track_idx, t), grouped) in tracks.iter().enumerate().zip(grouped) {
+            match grouped {
+                Some(entries) => samples.extend(entries.into_iter().map(|s| (track_idx as u32, s))),
+                None => {
+                    for sample in t.sample_table.iter_samples() {
+                        let s = sample?;
+                        samples.push((track_idx as u32, s));
+                    }
+                }
             }
             for s in &t.fragment_samples {
                 samples.push((track_idx as u32, *s));
