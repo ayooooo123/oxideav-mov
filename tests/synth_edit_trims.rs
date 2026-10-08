@@ -23,6 +23,7 @@ impl CodecResolver for Tags {
         match fourcc {
             b"MP4A" => Some(CodecId::new("aac")),
             b"TWOS" => Some(CodecId::new("pcm_s16be")),
+            b"AGSM" => Some(CodecId::new("gsm")),
             _ => None,
         }
     }
@@ -142,4 +143,21 @@ fn a_chunk_grouped_track_loses_the_packets_past_its_edit() {
     let input: Box<dyn ReadSeek> = Box::new(Cursor::new(file));
     let d = oxideav_mov::demuxer::open(input, &Tags).expect("open");
     assert_eq!(packets(d), [(Some(0), None), (Some(1024), None), (Some(2048), trim(0, 512))]);
+}
+
+#[test]
+fn a_gsm_frame_past_the_edit_end_is_discarded() {
+    // 800 GSM samples in one chunk: one 33-byte packet per 160-sample frame.
+    // The edit ends at 789: the last frame presents 149 samples, and
+    // demux.c counts it as GSM's 160 (`codecpar->frame_size`), so 11 come
+    // off, as FFmpeg trims fate-suite gsm/sample-gsm-8000.mov.
+    let stsd = build_stsd_audio(b"agsm", 1, 16, 48000, &[]);
+    let stsz = build_stsz_constant(1, 800);
+    let file = movie(&stsd, &[[800, 1]], &stsz, 800, (48000, 800), &[(789, 0)]);
+    let input: Box<dyn ReadSeek> = Box::new(Cursor::new(file));
+    let d = oxideav_mov::demuxer::open(input, &Tags).expect("open");
+    assert_eq!(
+        packets(d),
+        [(Some(0), None), (Some(160), None), (Some(320), None), (Some(480), None), (Some(640), trim(0, 11))]
+    );
 }

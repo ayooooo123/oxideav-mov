@@ -28,7 +28,8 @@
 //!   total and the edit list's), counted as at least one codec frame long
 //!   for codecs with fixed frames. In a track read per chunk
 //!   (`sound_chunks`) that packet lasts until the stream's end, so it
-//!   discards nothing.
+//!   discards nothing unless the codec's frame is longer: a GSM packet is
+//!   one 160-sample frame, and the samples of it past the end come off.
 //! - After a seek, an audio track's next packet skips the priming still
 //!   ahead of it.
 //!
@@ -120,10 +121,16 @@ pub(crate) fn shift(t: &Track, movie_timescale: u32) -> i64 {
 }
 
 /// The codec frame length FFmpeg's decoders report for codecs with fixed
-/// frames (the track's most common sample duration), 0 for the others.
+/// frames (`codecpar->frame_size`, which demux.c's discard window counts
+/// the last packet as at least): the track's most common sample duration,
+/// or the length the decoder's init sets; 0 for the others.
 fn frame_size(t: &Track, codec: &str) -> i64 {
-    if !matches!(codec, "aac" | "mp1" | "mp2" | "mp3" | "ac3" | "eac3") {
-        return 0;
+    match codec {
+        // gsm_init: GSM_FRAME_SIZE, two frames per Microsoft block.
+        "gsm" => return 160,
+        "gsm_ms" => return 320,
+        "aac" | "mp1" | "mp2" | "mp3" | "ac3" | "eac3" => {}
+        _ => return 0,
     }
     let mut counts: BTreeMap<u32, u64> = BTreeMap::new();
     for e in &t.sample_table.stts {
