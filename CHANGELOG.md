@@ -29,6 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bound on its own before the total was checked, so a small file with
   many sound tracks took memory per track (320 MB for a 2.9 KB file with
   8 tracks).
+- H.264, HEVC and other video in QuickTime movies decode: a video track's
+  extradata is its decoder configuration record (the `avcC`, `hvcC`,
+  `av1C`, `glbl` ... payload, or an `esds`'s DecoderSpecificInfo), as
+  FFmpeg's `mov_read_glbl` and `mov_read_esds` read it. It was the whole
+  sample-entry extension area, atom headers and `pasp`/`colr` included,
+  which the H.264 and HEVC decoders refused. Entries without a record keep
+  the extension area.
+
+### Added
+
+- `MovDemuxer::ffmpeg_edit_lists`, on for the registry's `open`: edit
+  lists read as FFmpeg's mov demuxer reads the ones it applies as one
+  shift (leading empty edits, then one media edit at rate 1). Timestamps
+  move by the empty edits minus the edit's `media_time` (B-frame delay,
+  start delay), and audio packets carry the priming and end padding FFmpeg
+  removes from the decoded sound as `Demuxer::packet_metadata` trims, with
+  the skip a seek's landing packet needs (`src/audio_trim.rs`, LGPL port).
+  Other lists keep the media timeline; `MovDemuxer::open` is unchanged.
+  Requires the PearTube oxideav-core fork (`Demuxer::packet_metadata`).
 
 ## [0.0.6](https://github.com/OxideAV/oxideav-mov/compare/v0.0.5...v0.0.6) - 2026-10-04
 

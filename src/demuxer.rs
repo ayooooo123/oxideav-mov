@@ -56,8 +56,8 @@ use crate::uuid::{parse_uuid, Uuid};
 
 #[cfg(feature = "registry")]
 use oxideav_core::{
-    CodecId, CodecParameters, CodecResolver, CodecTag, Demuxer, Error, NullCodecResolver, Packet,
-    ProbeContext, ReadSeek, Result, StreamInfo, TimeBase,
+    AudioTrim, CodecId, CodecParameters, CodecResolver, CodecTag, Demuxer, Error, NullCodecResolver, Packet,
+    PacketMetadata, ProbeContext, ReadSeek, Result, StreamInfo, TimeBase,
 };
 
 #[cfg(not(feature = "registry"))]
@@ -222,6 +222,27 @@ pub struct MovDemuxer {
     /// [`MovDemuxer::apply_edit_lists`] enables the edited timeline
     /// (parallel to `tracks`; empty while the mode is off).
     edited_segments: Vec<Vec<crate::EditSegment>>,
+    /// [`MovDemuxer::ffmpeg_edit_lists`]: timestamps and audio trims as
+    /// FFmpeg reads simple edit lists (`audio_trim`).
+    #[cfg(feature = "registry")]
+    ffmpeg_edits: bool,
+    /// Per track: how far FFmpeg moves its timestamps (`audio_trim::shift`).
+    #[cfg(feature = "registry")]
+    shifts: Vec<i64>,
+    /// Audio packets' trims, by track and sample index.
+    #[cfg(feature = "registry")]
+    trims: std::collections::HashMap<(u32, u32), crate::audio_trim::Trim>,
+    /// Per track: what its first packet after a seek skips.
+    #[cfg(feature = "registry")]
+    seek_trims: Vec<Option<crate::audio_trim::SeekTrim>>,
+    /// Per track: a seek happened and the track's next packet has not been
+    /// read yet.
+    #[cfg(feature = "registry")]
+    seek_pending: Vec<bool>,
+    /// `Demuxer::packet_metadata` of the packet read last; cleared before
+    /// every read and seek.
+    #[cfg(feature = "registry")]
+    packet_metadata: PacketMetadata,
     /// Per-track `trex` defaults from `moov/mvex` (ISO/IEC 14496-12
     /// §8.8.3). Empty for non-fragmented streams. Round 18 surfaces
     /// the parsed records so callers can inspect the per-track
@@ -1092,7 +1113,16 @@ impl MovDemuxer {
         // `fragment_samples` carries the actual data; both sources
         // contribute to the flat queue.
         let mut samples: Vec<(u32, SampleEntry)> = Vec::new();
+        // FFmpeg's reading of simple edit lists (`audio_trim`), from each
+        // track's samples while they are still in decode order.
+        #[cfg(feature = "registry")]
+        let movie_timescale = mvhd.as_ref().map_or(0, |m| m.time_scale);
+        #[cfg(feature = "registry")]
+        let mut trims = std::collections::HashMap::new();
+        #[cfg(feature = "registry")]
+        let mut seek_trims = vec![None; tracks.len()];
         for ((track_idx, t), grouped) in tracks.iter().enumerate().zip(grouped) {
+            let start = samples.len();
             match grouped {
                 Some(total) => crate::sound_chunks::push_grouped(t, total, track_idx as u32, &mut samples),
                 None => {
@@ -1102,10 +1132,27 @@ impl MovDemuxer {
                     }
                 }
             }
+            #[cfg(feature = "registry")]
+            {
+                let codec = streams[track_idx].params.codec_id.as_str();
+                seek_trims[track_idx] = crate::audio_trim::audio_trims(
+                    t,
+                    track_idx as u32,
+                    codec,
+                    movie_timescale,
+                    grouped.is_some(),
+                    &samples[start..],
+                    &mut trims,
+                );
+            }
+            #[cfg(not(feature = "registry"))]
+            let _ = start;
             for s in &t.fragment_samples {
                 samples.push((track_idx as u32, *s));
             }
         }
+        #[cfg(feature = "registry")]
+        let shifts: Vec<i64> = tracks.iter().map(|t| crate::audio_trim::shift(t, movie_timescale)).collect();
         samples.sort_by_key(|(_, s)| s.offset);
 
         // Touch the resolver to silence unused warnings on the
@@ -1162,6 +1209,18 @@ impl MovDemuxer {
             apply_edits: false,
             emit_never_presented: false,
             edited_segments: Vec::new(),
+            #[cfg(feature = "registry")]
+            ffmpeg_edits: false,
+            #[cfg(feature = "registry")]
+            seek_pending: vec![false; seek_trims.len()],
+            #[cfg(feature = "registry")]
+            shifts,
+            #[cfg(feature = "registry")]
+            trims,
+            #[cfg(feature = "registry")]
+            seek_trims,
+            #[cfg(feature = "registry")]
+            packet_metadata: PacketMetadata::default(),
             trex_defaults,
             mehd: mehd_box,
             leva: leva_box,
@@ -1661,6 +1720,40 @@ impl MovDemuxer {
     /// edited-timeline packet contract on this demuxer.
     pub fn edit_lists_applied(&self) -> bool {
         self.apply_edits
+    }
+
+    /// Read edit lists as FFmpeg's mov demuxer reads the ones it applies
+    /// as one shift (leading empty edits, then one media edit at rate 1):
+    /// every timestamp of the track moves by the empty edits minus the
+    /// edit's `media_time`, and audio packets carry the priming and the
+    /// end FFmpeg removes from the decoded sound as
+    /// `Demuxer::packet_metadata` trims. Tracks with other lists keep the
+    /// media timeline. Seeks take and return timestamps on the moved
+    /// timeline. The registry's `open` enables it; it does nothing while
+    /// [`MovDemuxer::apply_edit_lists`] is on.
+    #[cfg(feature = "registry")]
+    pub fn ffmpeg_edit_lists(&mut self, enable: bool) {
+        self.ffmpeg_edits = enable;
+    }
+
+    /// Sets `packet_metadata`'s audio trim for `sample` of `stream`: its
+    /// stored trims, and after a seek the priming still ahead of it.
+    #[cfg(feature = "registry")]
+    fn attach_trim(&mut self, stream: u32, sample: &SampleEntry) {
+        let track = stream as usize;
+        let trim = self.trims.get(&(stream, sample.index)).copied().unwrap_or_default();
+        let mut skip = trim.skip;
+        if self.seek_pending.get(track).copied().unwrap_or(false) {
+            self.seek_pending[track] = false;
+            if let Some(seek) = self.seek_trims[track] {
+                skip = seek.skip_at(sample.dts as i64);
+            }
+        }
+        let rate = self.tracks[track].mdhd.time_scale;
+        if (skip > 0 || trim.discard > 0) && rate > 0 {
+            self.packet_metadata.audio_trim =
+                Some(AudioTrim { skip_samples: skip, discard_padding: trim.discard, sample_rate: rate });
+        }
     }
 
     /// Opt in (or back out) of **discard-flagged never-presented
@@ -3457,7 +3550,13 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                     if desc.height != 0 {
                         params.height = Some(desc.height as u32);
                     }
-                    if !desc.extra.is_empty() {
+                    // The decoder configuration record (`avcC`, `hvcC`,
+                    // an `esds`'s DecoderSpecificInfo, ...), as FFmpeg's
+                    // mov demuxer reads it; an entry without one keeps its
+                    // extension area.
+                    if let Some(config) = crate::track::video_codec_config(&desc.extra) {
+                        params.extradata = config;
+                    } else if !desc.extra.is_empty() {
                         params.extradata = desc.extra.clone();
                     }
                 }
@@ -4369,6 +4468,7 @@ impl Demuxer for MovDemuxer {
     }
 
     fn next_packet(&mut self) -> Result<Packet> {
+        self.packet_metadata = PacketMetadata::default();
         loop {
             let (stream_idx, sample, data) = self.read_next()?;
             let stream = &self.streams[stream_idx as usize];
@@ -4403,15 +4503,23 @@ impl Demuxer for MovDemuxer {
                 }
                 return Ok(pkt);
             }
+            let shift = if self.ffmpeg_edits { self.shifts[stream_idx as usize] } else { 0 };
             let mut pkt = Packet::new(stream_idx, stream.time_base, data)
-                .with_dts(sample.dts as i64)
-                .with_pts(sample.pts())
+                .with_dts((sample.dts as i64).saturating_add(shift))
+                .with_pts(sample.pts().saturating_add(shift))
                 .with_keyframe(sample.keyframe);
             if sample.duration > 0 {
                 pkt = pkt.with_duration(sample.duration as i64);
             }
+            if self.ffmpeg_edits {
+                self.attach_trim(stream_idx, &sample);
+            }
             return Ok(pkt);
         }
+    }
+
+    fn packet_metadata(&self) -> PacketMetadata {
+        self.packet_metadata.clone()
     }
 
     fn duration_micros(&self) -> Option<i64> {
@@ -4446,7 +4554,18 @@ impl Demuxer for MovDemuxer {
     ///    `(stream_index, SampleEntry)` queue and set `self.next` so
     ///    that the next `next_packet()` call emits it.
     fn seek_to(&mut self, stream_index: u32, pts: i64) -> Result<i64> {
-        self.seek_to_impl(stream_index, pts)
+        self.packet_metadata = PacketMetadata::default();
+        if !self.ffmpeg_edits || self.apply_edits {
+            return self.seek_to_impl(stream_index, pts);
+        }
+        let shift = self.shifts.get(stream_index as usize).copied().unwrap_or(0);
+        let landed = self.seek_to_impl(stream_index, pts.saturating_sub(shift))?;
+        // Each audio track's next packet skips the priming still ahead of
+        // it (mov.c `mov_get_skip_samples`).
+        for (pending, trim) in self.seek_pending.iter_mut().zip(&self.seek_trims) {
+            *pending = trim.is_some();
+        }
+        Ok(landed.saturating_add(shift))
     }
 }
 
@@ -4457,7 +4576,9 @@ pub fn open(
     input: Box<dyn oxideav_core::ReadSeek>,
     resolver: &dyn CodecResolver,
 ) -> Result<Box<dyn Demuxer>> {
-    let d = MovDemuxer::open_with(input, resolver)?;
+    let mut d = MovDemuxer::open_with(input, resolver)?;
+    // Players read through the registry: edit lists as FFmpeg reads them.
+    d.ffmpeg_edit_lists(true);
     Ok(Box::new(d))
 }
 

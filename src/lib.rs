@@ -51,6 +51,9 @@ pub mod uuid;
 mod sound_chunks;
 
 #[cfg(feature = "registry")]
+mod audio_trim;
+
+#[cfg(feature = "registry")]
 pub mod registry;
 
 #[cfg(not(feature = "registry"))]

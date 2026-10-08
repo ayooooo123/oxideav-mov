@@ -37,3 +37,8 @@ oxideav-core = { version = "0.1", optional = true }
 # standalone build paths — the decompression step is part of the core
 # parsing surface, not of the framework wiring.
 compcol = { version = "0.6", default-features = false, features = ["zlib"] }
+
+# `Demuxer::packet_metadata` (per-packet audio trims) is in the PearTube
+# oxideav-core fork, not yet on crates.io.
+[patch.crates-io]
+oxideav-core = { git = "https://github.com/ayooooo123/oxideav-core", rev = "96094a916d8b9f2695f70bb0d53e5956b8a79847" }

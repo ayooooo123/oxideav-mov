@@ -1802,6 +1802,40 @@ fn scan_video_extensions(entry: &mut SampleDescription) -> Result<()> {
     })
 }
 
+/// The decoder configuration in a video sample description's extension
+/// area, as FFmpeg 2da55bf's mov demuxer reads it into extradata
+/// (`mov_read_glbl`, `mov_read_esds`): the payload of a configuration atom
+/// (`avcC`, `hvcC`, `av1C`, `glbl`, `evcC`, `lvcC`, `apvC`; `vvcC` after its
+/// FullBox header), or an `esds`'s DecoderSpecificInfo. Once a record
+/// longer than a byte is found, later ones are ignored. A `glbl` that only
+/// wraps a `fiel` atom (old libavformat files) is not a record. `None` when
+/// the area has no record.
+pub fn video_codec_config(extra: &[u8]) -> Option<Vec<u8>> {
+    let mut config: Option<Vec<u8>> = None;
+    let _ = walk_atoms(extra, |fourcc, payload| {
+        if config.as_ref().is_some_and(|c| c.len() > 1) {
+            return Ok(());
+        }
+        let record = match fourcc {
+            b"avcC" | b"hvcC" | b"av1C" | b"evcC" | b"lvcC" | b"apvC" => Some(payload.to_vec()),
+            b"glbl" => {
+                let wraps_fiel = payload.len() >= 10
+                    && &payload[4..8] == b"fiel"
+                    && u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]]) as usize == payload.len();
+                (!wraps_fiel).then(|| payload.to_vec())
+            }
+            b"vvcC" => payload.get(4..).map(<[u8]>::to_vec),
+            b"esds" => parse_esds(payload).ok().and_then(|d| esds_decoder_specific_info(&d)),
+            _ => None,
+        };
+        if record.is_some() {
+            config = record;
+        }
+        Ok(())
+    });
+    config
+}
+
 /// Scan the `extra` blob of an audio sample description for the
 /// typed extension atoms: the Apple `chan` channel layout, the ISO
 /// `srat` / `chnl` boxes, and the QTFF 2012-08-14 sound-description

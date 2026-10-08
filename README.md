@@ -661,6 +661,8 @@ trait impl and `register()` entry point disappear.
 
 ## License
 
-MIT — see `LICENSE` — except the grouping of QuickTime sound samples into
-packets (`src/sound_chunks.rs`), ported from FFmpeg and LGPL-2.1-or-later
-(see `LICENSE-LGPL`); the crate as a whole is `MIT AND LGPL-2.1-or-later`.
+MIT — see `LICENSE` — except two files ported from FFmpeg and
+LGPL-2.1-or-later (see `LICENSE-LGPL`): the grouping of QuickTime sound
+samples into packets (`src/sound_chunks.rs`) and FFmpeg's reading of edit
+lists for timestamps and audio trims (`src/audio_trim.rs`). The crate as a
+whole is `MIT AND LGPL-2.1-or-later`.
