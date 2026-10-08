@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sample-entry extension area, atom headers and `pasp`/`colr` included,
   which the H.264 and HEVC decoders refused. Entries without a record keep
   the extension area.
+- AMR plays: an AMR-NB or AMR-WB track is mono at 8000 or 16000 Hz, as
+  FFmpeg's `mov_finalize_stsd_codec` forces it. 3GPP fixes the sample
+  entry's channel count at 2, which made the AMR decoders expect two
+  frames a packet and fail.
 
 ### Added
 

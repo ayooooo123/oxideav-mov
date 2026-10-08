@@ -3526,6 +3526,14 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                 if let Some(desc) = t.sample_descriptions.first() {
                     params.channels = Some(desc.channels);
                     params.sample_rate = Some(desc.sample_rate);
+                    // AMR: 3GPP fixes the entry's channel count at 2 and
+                    // need not carry the rate; FFmpeg's
+                    // mov_finalize_stsd_codec forces mono and the AMR rate.
+                    match params.codec_id.as_str() {
+                        "amr_nb" => (params.channels, params.sample_rate) = (Some(1), Some(8000)),
+                        "amr_wb" => (params.channels, params.sample_rate) = (Some(1), Some(16000)),
+                        _ => {}
+                    }
                     // MPEG-4 audio (`mp4a`, QTFF p. 185 – 186): the
                     // decoder configuration is the esds
                     // DecoderSpecificInfo (the AudioSpecificConfig),
