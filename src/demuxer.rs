@@ -3516,7 +3516,13 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                     ctx = ctx.width(desc.width as u32).height(desc.height as u32);
                 }
             }
-            if !subtitle {
+            // Linear PCM: the codec FFmpeg's MOV demuxer chooses from the
+            // entry itself (crate::pcm_codec); anything else is the
+            // registry's to resolve.
+            let pcm = t.is_audio().then(|| t.sample_descriptions.first().and_then(crate::pcm_codec::pcm_codec_id)).flatten();
+            if let Some(id) = pcm {
+                params.codec_id = CodecId::new(id);
+            } else if !subtitle {
                 if let Some(id) = resolver.resolve_tag(&ctx) {
                     params.codec_id = id;
                 }

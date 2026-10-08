@@ -48,6 +48,8 @@ pub mod track_selection;
 pub mod user_data;
 pub mod uuid;
 
+#[cfg(feature = "registry")]
+mod pcm_codec;
 mod sound_chunks;
 
 #[cfg(feature = "registry")]
