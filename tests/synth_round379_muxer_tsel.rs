@@ -12,8 +12,8 @@ use std::io::Cursor;
 
 use oxideav_core::ReadSeek;
 use oxideav_mov::{
-    KindEntry, MovDemuxer, MovMuxer, MuxSample, MuxTrackKind, TrackSelection, TSEL_ATTR_BITRATE,
-    TSEL_ATTR_CODEC,
+    KindEntry, MovDemuxer, MovMuxer, MuxSample, MuxTrackKind, TSEL_ATTR_BITRATE, TSEL_ATTR_CODEC,
+    TrackSelection,
 };
 
 fn open(bytes: Vec<u8>) -> MovDemuxer {
@@ -23,11 +23,12 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 
 fn video_track(m: &mut MovMuxer) -> u32 {
     let samples: Vec<MuxSample> = (0..2)
-        .map(|i| MuxSample {
-            data: vec![(i as u8).wrapping_add(1); 8],
-            duration: 100,
-            keyframe: i == 0,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![(i as u8).wrapping_add(1); 8])
+                .with_duration(100)
+                .with_keyframe(i == 0)
+                .with_composition_offset(0)
         })
         .collect();
     m.add_track(
@@ -126,13 +127,14 @@ fn tsel_none_emits_no_box() {
 #[test]
 fn tsel_unknown_track_errors() {
     let mut m = MovMuxer::new();
-    assert!(m
-        .set_track_selection(
+    assert!(
+        m.set_track_selection(
             9,
             Some(TrackSelection {
                 switch_group: 1,
                 attributes: Vec::new()
             })
         )
-        .is_err());
+        .is_err()
+    );
 }

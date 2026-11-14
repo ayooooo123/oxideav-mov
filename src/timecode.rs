@@ -177,6 +177,7 @@ impl Tmcd {
 /// by the bytes themselves — call [`Tmcd::decode_sample`] which consults
 /// the owning [`Tmcd`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TimecodeSample {
     /// A 32-bit tape-counter value (Counter flag set). Interpreted in
     /// units of the sample description's `number_of_frames` "frames per
@@ -345,10 +346,10 @@ fn scan_source_reference(buf: &[u8]) -> Option<String> {
             break;
         }
         let fc = &buf[p + 4..p + 8];
-        if fc == b"udta" {
-            if let Some(s) = find_name_atom(&buf[p + 8..p + size]) {
-                return Some(s);
-            }
+        if fc == b"udta"
+            && let Some(s) = find_name_atom(&buf[p + 8..p + size])
+        {
+            return Some(s);
         }
         p += size;
     }

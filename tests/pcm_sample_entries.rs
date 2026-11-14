@@ -147,5 +147,8 @@ fn version_2_lpcm_by_its_flags() {
 
 #[test]
 fn other_formats_still_go_to_the_registry() {
-    assert_eq!(codec(entry(b"ima4", 0, 16, &[])), "unknown");
+    // `ima4` names its own codec (QTFF Table 4-7 p. 187); a format code
+    // that names none stays unresolved without a registry claim.
+    assert_eq!(codec(entry(b"ima4", 0, 16, &[])), "adpcm_ima_qt");
+    assert_eq!(codec(entry(b"zzzz", 0, 16, &[])), "unknown");
 }

@@ -21,11 +21,12 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 
 fn video_track(m: &mut MovMuxer) -> u32 {
     let samples: Vec<MuxSample> = (0..3)
-        .map(|i| MuxSample {
-            data: vec![(i as u8).wrapping_add(1); 8],
-            duration: 100,
-            keyframe: i == 0,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![(i as u8).wrapping_add(1); 8])
+                .with_duration(100)
+                .with_keyframe(i == 0)
+                .with_composition_offset(0)
         })
         .collect();
     m.add_track(
@@ -130,12 +131,13 @@ fn clip_none_emits_no_box() {
 #[test]
 fn clip_unknown_track_errors() {
     let mut m = MovMuxer::new();
-    assert!(m
-        .set_track_clipping(
+    assert!(
+        m.set_track_clipping(
             9,
             Some(Clipping {
                 region: ClippingRegion::rectangular(QdRect::default()),
             }),
         )
-        .is_err());
+        .is_err()
+    );
 }

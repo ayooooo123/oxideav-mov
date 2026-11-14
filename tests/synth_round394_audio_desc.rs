@@ -20,11 +20,12 @@ use oxideav_mov::{
 
 fn samples(n: usize) -> Vec<MuxSample> {
     (0..n)
-        .map(|i| MuxSample {
-            data: vec![i as u8; 8],
-            duration: 1024,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![i as u8; 8])
+                .with_duration(1024)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }
@@ -147,10 +148,9 @@ fn iso_v1_srat_and_defined_chnl_roundtrip() {
     let tid = add_audio(&mut m, 6);
     m.set_audio_entry_v1(
         tid,
-        AudioEntryV1 {
-            sampling_rate: Some(96_000),
-            channel_layout: Some(chnl.clone()),
-        },
+        AudioEntryV1::default()
+            .with_sampling_rate(Some(96_000))
+            .with_channel_layout(Some(chnl.clone())),
     )
     .unwrap();
     let bytes = m.encode_to_vec().unwrap();
@@ -190,10 +190,9 @@ fn iso_v1_explicit_positions_roundtrip() {
     let tid = add_audio(&mut m, 2);
     m.set_audio_entry_v1(
         tid,
-        AudioEntryV1 {
-            sampling_rate: None,
-            channel_layout: Some(chnl.clone()),
-        },
+        AudioEntryV1::default()
+            .with_sampling_rate(None)
+            .with_channel_layout(Some(chnl.clone())),
     )
     .unwrap();
     let d = open(m.encode_to_vec().unwrap());
@@ -210,10 +209,9 @@ fn iso_v1_roundtrips_through_fragmented_path() {
     let tid = add_audio(&mut m, 2);
     m.set_audio_entry_v1(
         tid,
-        AudioEntryV1 {
-            sampling_rate: Some(192_000),
-            channel_layout: None,
-        },
+        AudioEntryV1::default()
+            .with_sampling_rate(Some(192_000))
+            .with_channel_layout(None),
     )
     .unwrap();
     let bytes = m.encode_fragmented_to_vec().unwrap();
@@ -239,19 +237,20 @@ fn validation_rejects_bad_configs() {
     let aud = add_audio(&mut m, 2);
 
     // Non-audio track.
-    assert!(m
-        .set_sound_description_v1(vid, SoundV1::default(), false)
-        .is_err());
+    assert!(
+        m.set_sound_description_v1(vid, SoundV1::default(), false)
+            .is_err()
+    );
     assert!(m.set_audio_entry_v1(vid, AudioEntryV1::default()).is_err());
     // Unknown id.
     assert!(m.set_audio_entry_v1(99, AudioEntryV1::default()).is_err());
     // Explicit layout row count must match the channel count.
-    assert!(m
-        .set_audio_entry_v1(
+    assert!(
+        m.set_audio_entry_v1(
             aud,
-            AudioEntryV1 {
-                sampling_rate: None,
-                channel_layout: Some(ChannelLayout {
+            AudioEntryV1::default()
+                .with_sampling_rate(None)
+                .with_channel_layout(Some(ChannelLayout {
                     stream_structure: ChannelLayout::CHANNEL_STRUCTURED,
                     channels: Some(ChannelStructure::Explicit(vec![SpeakerPosition {
                         speaker_position: 2,
@@ -259,39 +258,41 @@ fn validation_rejects_bad_configs() {
                         elevation: None,
                     }])),
                     object_count: None,
-                }),
-            },
+                })),
         )
-        .is_err());
+        .is_err()
+    );
     // definedLayout == 0 on-wire selects the explicit form.
-    assert!(m
-        .set_audio_entry_v1(
+    assert!(
+        m.set_audio_entry_v1(
             aud,
-            AudioEntryV1 {
-                sampling_rate: None,
-                channel_layout: Some(ChannelLayout {
+            AudioEntryV1::default()
+                .with_sampling_rate(None)
+                .with_channel_layout(Some(ChannelLayout {
                     stream_structure: ChannelLayout::CHANNEL_STRUCTURED,
                     channels: Some(ChannelStructure::Defined {
                         defined_layout: 0,
                         omitted_channels_map: 0,
                     }),
                     object_count: None,
-                }),
-            },
+                })),
         )
-        .is_err());
+        .is_err()
+    );
     // Mutual exclusion, both orders.
     m.set_audio_entry_v1(aud, AudioEntryV1::default()).unwrap();
-    assert!(m
-        .set_sound_description_v1(aud, SoundV1::default(), false)
-        .is_err());
+    assert!(
+        m.set_sound_description_v1(aud, SoundV1::default(), false)
+            .is_err()
+    );
     let mut m2 = MovMuxer::new();
     let aud2 = add_audio(&mut m2, 2);
     m2.set_sound_description_v1(aud2, SoundV1::default(), true)
         .unwrap();
-    assert!(m2
-        .set_audio_entry_v1(aud2, AudioEntryV1::default())
-        .is_err());
+    assert!(
+        m2.set_audio_entry_v1(aud2, AudioEntryV1::default())
+            .is_err()
+    );
 }
 
 #[test]

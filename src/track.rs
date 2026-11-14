@@ -10,27 +10,27 @@
 
 use crate::clip::Clipping;
 use crate::edit::{
-    media_pts_to_movie_pts, movie_pts_to_media_pts, resolve_edit_segments, EditList, EditSegment,
+    EditList, EditSegment, media_pts_to_movie_pts, movie_pts_to_media_pts, resolve_edit_segments,
 };
 use crate::gmhd::Gmhd;
 use crate::header::{Hdlr, Hmhd, Mdhd, MediaHeaderKind, Tkhd};
 use crate::kind::KindEntry;
 use crate::matte::Matte;
 use crate::media_meta::{
-    parse_chan, parse_clap, parse_colr, parse_fiel, parse_mjht, parse_mjqt, parse_pasp, Chan, Clap,
-    ColorParameters, Cslg, Fiel, MetaKeyValue, Mjht, Mjqt, Pasp, Tapt,
+    Chan, Clap, ColorParameters, Cslg, Fiel, MetaKeyValue, Mjht, Mjqt, Pasp, Tapt, parse_chan,
+    parse_clap, parse_colr, parse_fiel, parse_mjht, parse_mjqt, parse_pasp,
 };
 use crate::metadata_sample::{
-    parse_metadata_sample_entry, parse_stxt, parse_subtitle_sample_entry, MetadataSampleEntry,
-    SimpleTextSampleEntry, SubtitleSampleEntry,
+    MetadataSampleEntry, SimpleTextSampleEntry, SubtitleSampleEntry, parse_metadata_sample_entry,
+    parse_stxt, parse_subtitle_sample_entry,
 };
 use crate::qt_metadata::QtMetadata;
 use crate::reference::DataReference;
 use crate::sample_table::{SampleEntry, SampleTable};
 use crate::text_sample::{
-    parse_text_sample_description, TextSampleDescription, TEXT_SAMPLE_DESC_FIXED_LEN,
+    TEXT_SAMPLE_DESC_FIXED_LEN, TextSampleDescription, parse_text_sample_description,
 };
-use crate::timecode::{parse_tmcd_sample_description, Tmcd};
+use crate::timecode::{Tmcd, parse_tmcd_sample_description};
 use crate::track_load::Load;
 use crate::track_selection::TrackSelection;
 use crate::user_data::UserDataEntry;
@@ -57,6 +57,7 @@ pub struct TrackRef {
 
 /// High-level discriminator for [`TrackRef::kind`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TrackRefKind {
     /// `chap` — chapter list (typically references a text track).
     Chapter,
@@ -503,56 +504,7 @@ pub fn parse_esds(payload: &[u8]) -> Result<Vec<u8>> {
 /// decoder needs as extradata. `None` when the structure does not
 /// parse or carries no DSI.
 pub fn esds_decoder_specific_info(descriptor: &[u8]) -> Option<Vec<u8>> {
-    /// §8.3.3 expandable-class size: up to four 7-bit groups.
-    fn header(buf: &[u8], pos: usize) -> Option<(u8, usize, usize)> {
-        let tag = *buf.get(pos)?;
-        let mut len = 0usize;
-        let mut i = pos + 1;
-        for _ in 0..4 {
-            let b = *buf.get(i)?;
-            i += 1;
-            len = (len << 7) | usize::from(b & 0x7F);
-            if b & 0x80 == 0 {
-                return Some((tag, i, len));
-            }
-        }
-        None
-    }
-    let (tag, body, len) = header(descriptor, 0)?;
-    if tag != 0x03 {
-        return None;
-    }
-    let end = body.checked_add(len)?.min(descriptor.len());
-    let flags = *descriptor.get(body + 2)?;
-    let mut pos = body + 3;
-    if flags & 0x80 != 0 {
-        pos += 2; // dependsOn_ES_ID
-    }
-    if flags & 0x40 != 0 {
-        pos += 1 + usize::from(*descriptor.get(pos)?); // URLlength + URLstring
-    }
-    if flags & 0x20 != 0 {
-        pos += 2; // OCR_ES_Id
-    }
-    while pos < end {
-        let (t, b, l) = header(descriptor, pos)?;
-        if t == 0x04 {
-            // objectTypeIndication(8) streamType/upStream/reserved(8)
-            // bufferSizeDB(24) maxBitrate(32) avgBitrate(32) = 13 bytes.
-            let dcd_end = b.checked_add(l)?.min(end);
-            let mut p = b + 13;
-            while p < dcd_end {
-                let (t2, b2, l2) = header(descriptor, p)?;
-                if t2 == 0x05 {
-                    return descriptor.get(b2..b2.checked_add(l2)?).map(<[u8]>::to_vec);
-                }
-                p = b2.checked_add(l2)?;
-            }
-            return None;
-        }
-        pos = b.checked_add(l)?;
-    }
-    None
+    crate::audio_params::EsDecoderConfig::parse(descriptor)?.decoder_specific_info
 }
 
 /// Serialise a framed `esds` atom from raw elementary-stream-
@@ -693,6 +645,7 @@ pub struct SpeakerPosition {
 /// raw bytes plus parsed dims/sample-rate when we recognise the
 /// media type.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct SampleDescription {
     pub format: [u8; 4],
     pub data_reference_index: u16,
@@ -938,6 +891,7 @@ impl SampleDescription {
 
 /// One track's accumulated state.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct Track {
     pub tkhd: Tkhd,
     pub mdhd: Mdhd,
@@ -2333,7 +2287,7 @@ mod tests {
         body[8..10].copy_from_slice(&3u16.to_be_bytes()); // always3
         body[10..12].copy_from_slice(&16u16.to_be_bytes()); // always16
         body[12..14].copy_from_slice(&(-2i16).to_be_bytes()); // alwaysMinus2
-                                                              // always0 @ 14..16 left zero
+        // always0 @ 14..16 left zero
         body[16..20].copy_from_slice(&65536u32.to_be_bytes()); // always65536
         body[20..24].copy_from_slice(&size_of_struct_only.to_be_bytes());
         body[24..32].copy_from_slice(&rate.to_be_bytes());

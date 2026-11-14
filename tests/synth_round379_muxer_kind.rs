@@ -19,12 +19,13 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 
 fn text_track(m: &mut MovMuxer) -> u32 {
     use oxideav_mov::SimpleTextSampleEntry;
-    let samples = vec![MuxSample {
-        data: b"hello".to_vec(),
-        duration: 100,
-        keyframe: true,
-        composition_offset: 0,
-    }];
+    let samples = vec![
+        MuxSample::default()
+            .with_data(b"hello".to_vec())
+            .with_duration(100)
+            .with_keyframe(true)
+            .with_composition_offset(0),
+    ];
     m.add_track(
         MuxTrackKind::SimpleText {
             description: SimpleTextSampleEntry::default(),
@@ -131,13 +132,14 @@ fn empty_kinds_emit_no_box() {
 #[test]
 fn kind_unknown_track_errors() {
     let mut m = MovMuxer::new();
-    assert!(m
-        .set_track_kinds(
+    assert!(
+        m.set_track_kinds(
             9,
             &[KindEntry {
                 scheme_uri: "urn:x".to_string(),
                 value: None
             }]
         )
-        .is_err());
+        .is_err()
+    );
 }

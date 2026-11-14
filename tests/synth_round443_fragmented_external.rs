@@ -32,8 +32,8 @@ use std::io::{Cursor, Seek, SeekFrom};
 
 use oxideav_core::{Error, ReadSeek};
 use oxideav_mov::{
-    parse_moof, read_atom_header, DataReference, DataReferenceWrite, ExternalSampleLocation,
-    FragmentationMode, MovDemuxer, MovMuxer, MuxSample, MuxTrackKind, TrafAddressing, TrafRecord,
+    DataReference, DataReferenceWrite, ExternalSampleLocation, FragmentationMode, MovDemuxer,
+    MovMuxer, MuxSample, MuxTrackKind, TrafAddressing, TrafRecord, parse_moof, read_atom_header,
 };
 
 /// Sidecar "external file": 6 bytes of unrelated preamble, then four
@@ -49,10 +49,11 @@ fn sidecar() -> (Vec<u8>, Vec<ExternalSampleLocation>, Vec<Vec<u8>>) {
         if i == 2 {
             file.extend_from_slice(&[0xEE; 9]); // gap ⇒ second run
         }
-        locations.push(ExternalSampleLocation {
-            offset: file.len() as u64,
-            size: p.len() as u32,
-        });
+        locations.push(
+            ExternalSampleLocation::default()
+                .with_offset(file.len() as u64)
+                .with_size(p.len() as u32),
+        );
         file.extend_from_slice(p);
     }
     (file, locations, payloads)
@@ -60,22 +61,24 @@ fn sidecar() -> (Vec<u8>, Vec<ExternalSampleLocation>, Vec<Vec<u8>>) {
 
 fn video_samples(n: usize) -> Vec<MuxSample> {
     (0..n)
-        .map(|i| MuxSample {
-            data: vec![0x10 + i as u8; 12],
-            duration: 100,
-            keyframe: i % 2 == 0,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![0x10 + i as u8; 12])
+                .with_duration(100)
+                .with_keyframe(i % 2 == 0)
+                .with_composition_offset(0)
         })
         .collect()
 }
 
 fn external_audio_samples(n: usize) -> Vec<MuxSample> {
     (0..n)
-        .map(|_| MuxSample {
-            data: Vec::new(),
-            duration: 1024,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|_| {
+            MuxSample::default()
+                .with_data(Vec::new())
+                .with_duration(1024)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }
@@ -217,10 +220,12 @@ fn fragmented_external_round_trips_through_opener() {
         }
     }
     assert_eq!(video.len(), 4);
-    assert!(video
-        .iter()
-        .enumerate()
-        .all(|(i, p)| *p == vec![0x10 + i as u8; 12]));
+    assert!(
+        video
+            .iter()
+            .enumerate()
+            .all(|(i, p)| *p == vec![0x10 + i as u8; 12])
+    );
     assert_eq!(audio, payloads);
     // DTS keeps climbing across fragments (running cursor).
     assert_eq!(audio_dts, vec![0, 1024, 2048, 3072]);
@@ -269,11 +274,12 @@ fn fragmented_external_equivalence_with_self_contained() {
         8000,
         payloads
             .iter()
-            .map(|p| MuxSample {
-                data: p.clone(),
-                duration: 1024,
-                keyframe: true,
-                composition_offset: 0,
+            .map(|p| {
+                MuxSample::default()
+                    .with_data(p.clone())
+                    .with_duration(1024)
+                    .with_keyframe(true)
+                    .with_composition_offset(0)
             })
             .collect(),
         &[],
@@ -364,11 +370,12 @@ fn fragment_locations_spreading_past_i32_are_rejected() {
         a,
         1,
         &[
-            ExternalSampleLocation { offset: 0, size: 4 },
-            ExternalSampleLocation {
-                offset: (i32::MAX as u64) + 8,
-                size: 4,
-            },
+            ExternalSampleLocation::default()
+                .with_offset(0)
+                .with_size(4),
+            ExternalSampleLocation::default()
+                .with_offset((i32::MAX as u64) + 8)
+                .with_size(4),
         ],
     )
     .expect("external");
@@ -402,11 +409,12 @@ fn patched_fragmented(
             },
             8000,
             (0..2)
-                .map(|i| MuxSample {
-                    data: vec![0xC0 + (t as u8) * 0x10 + i as u8; 4],
-                    duration: 1024,
-                    keyframe: true,
-                    composition_offset: 0,
+                .map(|i| {
+                    MuxSample::default()
+                        .with_data(vec![0xC0 + (t as u8) * 0x10 + i as u8; 4])
+                        .with_duration(1024)
+                        .with_keyframe(true)
+                        .with_composition_offset(0)
                 })
                 .collect(),
             &[],
@@ -453,10 +461,12 @@ fn patched_fragmented(
 #[test]
 fn default_base_is_moof_with_external_dref_is_refused() {
     // Sanity: unpatched opens fine.
-    assert!(MovDemuxer::open(
-        Box::new(Cursor::new(patched_fragmented(1, None, None))) as Box<dyn ReadSeek>
-    )
-    .is_ok());
+    assert!(
+        MovDemuxer::open(
+            Box::new(Cursor::new(patched_fragmented(1, None, None))) as Box<dyn ReadSeek>
+        )
+        .is_ok()
+    );
     // dri → the non-self Url entry while the tfhd still says
     // default-base-is-moof: §8.8.7.1 anchors moof-relative offsets at
     // a byte position of the fragment's own file.
@@ -510,10 +520,12 @@ fn inheriting_traf_between_local_trafs_is_still_legal() {
     // trun.data_offset values were authored moof-relative, so decoded
     // *payloads* are not asserted here; this pins that the mode
     // check itself accepts a legal all-local inheritance chain.)
-    assert!(MovDemuxer::open(
-        Box::new(Cursor::new(patched_fragmented(2, None, Some(2)))) as Box<dyn ReadSeek>
-    )
-    .is_ok());
+    assert!(
+        MovDemuxer::open(
+            Box::new(Cursor::new(patched_fragmented(2, None, Some(2)))) as Box<dyn ReadSeek>
+        )
+        .is_ok()
+    );
 }
 
 // ───────── hand-built moof: inherited chaining in the external file ─────────
@@ -665,11 +677,12 @@ fn bframe_video_samples(offsets: &[i32]) -> Vec<MuxSample> {
     offsets
         .iter()
         .enumerate()
-        .map(|(i, &cts)| MuxSample {
-            data: vec![0x40 + i as u8; 10],
-            duration: 100,
-            keyframe: i == 0,
-            composition_offset: cts,
+        .map(|(i, &cts)| {
+            MuxSample::default()
+                .with_data(vec![0x40 + i as u8; 10])
+                .with_duration(100)
+                .with_keyframe(i == 0)
+                .with_composition_offset(cts)
         })
         .collect()
 }
@@ -777,11 +790,12 @@ fn fragmented_external_track_keeps_composition_offsets() {
         },
         8000,
         cts.iter()
-            .map(|&c| MuxSample {
-                data: Vec::new(),
-                duration: 1024,
-                keyframe: true,
-                composition_offset: c,
+            .map(|&c| {
+                MuxSample::default()
+                    .with_data(Vec::new())
+                    .with_duration(1024)
+                    .with_keyframe(true)
+                    .with_composition_offset(c)
             })
             .collect(),
         &[],
@@ -953,11 +967,12 @@ fn fragments_without_sync_samples_contribute_no_tfra_entry() {
         },
         600,
         (0..4)
-            .map(|i| MuxSample {
-                data: vec![0x70 + i as u8; 8],
-                duration: 100,
-                keyframe: i == 0,
-                composition_offset: 0,
+            .map(|i| {
+                MuxSample::default()
+                    .with_data(vec![0x70 + i as u8; 8])
+                    .with_duration(100)
+                    .with_keyframe(i == 0)
+                    .with_composition_offset(0)
             })
             .collect(),
         &[],

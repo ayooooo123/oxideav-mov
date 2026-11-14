@@ -15,17 +15,18 @@ use std::io::Cursor;
 
 use oxideav_core::{Demuxer, Packet, ReadSeek};
 use oxideav_mov::{
-    EditSegmentKind, FragmentationMode, MovDemuxer, MovMuxer, MuxEdit, MuxSample, MuxTrackKind,
-    MEDIA_RATE_ONE,
+    EditSegmentKind, FragmentationMode, MEDIA_RATE_ONE, MovDemuxer, MovMuxer, MuxEdit, MuxSample,
+    MuxTrackKind,
 };
 
 fn uniform_samples(n: usize, dur: u32) -> Vec<MuxSample> {
     (0..n)
-        .map(|i| MuxSample {
-            data: vec![i as u8; 4],
-            duration: dur,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![i as u8; 4])
+                .with_duration(dur)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }

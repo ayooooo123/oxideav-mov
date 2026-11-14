@@ -25,11 +25,12 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 fn samples(payloads: &[&[u8]]) -> Vec<MuxSample> {
     payloads
         .iter()
-        .map(|p| MuxSample {
-            data: p.to_vec(),
-            duration: 100,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|p| {
+            MuxSample::default()
+                .with_data(p.to_vec())
+                .with_duration(100)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }
@@ -130,9 +131,10 @@ fn hint_track_references_media_track_via_tref_hint() {
     assert_eq!(d.tracks.len(), 2);
     assert!(d.tracks[1].hdlr.is_hint());
     let refs = &d.tracks[1].references;
-    assert!(refs
-        .iter()
-        .any(|r| r.fourcc == *b"hint" && r.track_ids.contains(&vid)));
+    assert!(
+        refs.iter()
+            .any(|r| r.fourcc == *b"hint" && r.track_ids.contains(&vid))
+    );
 }
 
 #[test]

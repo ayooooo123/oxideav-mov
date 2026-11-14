@@ -12,17 +12,18 @@ use std::io::Cursor;
 
 use oxideav_core::ReadSeek;
 use oxideav_mov::{
-    build_esds_atom, AudioEntryV1, AudioEntryV2, FragmentationMode, LpcmFlags, MovDemuxer,
-    MovMuxer, MuxSample, MuxTrackKind, SoundV1, WaveChild,
+    AudioEntryV1, AudioEntryV2, FragmentationMode, LpcmFlags, MovDemuxer, MovMuxer, MuxSample,
+    MuxTrackKind, SoundV1, WaveChild, build_esds_atom,
 };
 
 fn samples(n: usize) -> Vec<MuxSample> {
     (0..n)
-        .map(|i| MuxSample {
-            data: vec![i as u8; 8],
-            duration: 1024,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![i as u8; 8])
+                .with_duration(1024)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }
@@ -52,13 +53,12 @@ fn v2_lpcm_high_resolution_roundtrip() {
     // carry, 24-bit packed signed big-endian lpcm, 6 channels.
     let flags =
         LpcmFlags(LpcmFlags::IS_BIG_ENDIAN | LpcmFlags::IS_SIGNED_INTEGER | LpcmFlags::IS_PACKED);
-    let entry = AudioEntryV2 {
-        audio_sample_rate: 192_000.0,
-        const_bits_per_channel: 24,
-        format_specific_flags: flags,
-        const_bytes_per_audio_packet: 18,
-        const_lpcm_frames_per_audio_packet: 1,
-    };
+    let entry = AudioEntryV2::default()
+        .with_audio_sample_rate(192_000.0)
+        .with_const_bits_per_channel(24)
+        .with_format_specific_flags(flags)
+        .with_const_bytes_per_audio_packet(18)
+        .with_const_lpcm_frames_per_audio_packet(1);
     let mut m = MovMuxer::new();
     let tid = add_audio(&mut m, *b"lpcm", 6, &[]);
     m.set_sound_description_v2(tid, entry).unwrap();
@@ -90,10 +90,7 @@ fn v2_lpcm_high_resolution_roundtrip() {
 fn v2_non_integer_rate_survives_float64() {
     // A fractional rate (NTSC-pulled 44.1 kHz) is exactly the case
     // the Float64 field exists for; the integer mirror rounds.
-    let entry = AudioEntryV2 {
-        audio_sample_rate: 44_099.9560439560,
-        ..AudioEntryV2::default()
-    };
+    let entry = AudioEntryV2::default().with_audio_sample_rate(44_099.9560439560);
     let mut m = MovMuxer::new();
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(tid, entry).unwrap();
@@ -119,10 +116,7 @@ fn v2_extensions_start_at_size_of_struct_only() {
         terminated: true,
         non_atom_data: Vec::new(),
     };
-    let entry = AudioEntryV2 {
-        audio_sample_rate: 96_000.0,
-        ..AudioEntryV2::default()
-    };
+    let entry = AudioEntryV2::default().with_audio_sample_rate(96_000.0);
     let mut m = MovMuxer::new();
     let tid = add_audio(&mut m, *b"mp4a", 2, &wave.to_atom_bytes());
     m.set_sound_description_v2(tid, entry).unwrap();
@@ -155,13 +149,12 @@ fn v0_entry_with_direct_esds_and_terminator() {
 
 #[test]
 fn v2_roundtrips_through_fragmented_path() {
-    let entry = AudioEntryV2 {
-        audio_sample_rate: 176_400.0,
-        const_bits_per_channel: 32,
-        format_specific_flags: LpcmFlags(LpcmFlags::IS_FLOAT | LpcmFlags::IS_PACKED),
-        const_bytes_per_audio_packet: 8,
-        const_lpcm_frames_per_audio_packet: 1,
-    };
+    let entry = AudioEntryV2::default()
+        .with_audio_sample_rate(176_400.0)
+        .with_const_bits_per_channel(32)
+        .with_format_specific_flags(LpcmFlags(LpcmFlags::IS_FLOAT | LpcmFlags::IS_PACKED))
+        .with_const_bytes_per_audio_packet(8)
+        .with_const_lpcm_frames_per_audio_packet(1);
     let mut m = MovMuxer::new().with_fragmentation(FragmentationMode::ByFrameCount(2));
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(tid, entry).unwrap();
@@ -185,10 +178,7 @@ fn v2_wire_layout_carries_always_constants() {
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(
         tid,
-        AudioEntryV2 {
-            audio_sample_rate: 48_000.0,
-            ..AudioEntryV2::default()
-        },
+        AudioEntryV2::default().with_audio_sample_rate(48_000.0),
     )
     .unwrap();
     let bytes = m.encode_to_vec().unwrap();
@@ -234,25 +224,17 @@ fn v2_validation_and_mutual_exclusion() {
         &[],
     );
     let aud = add_audio(&mut m, *b"lpcm", 2, &[]);
-    let ok = AudioEntryV2 {
-        audio_sample_rate: 48_000.0,
-        ..AudioEntryV2::default()
-    };
+    let ok = AudioEntryV2::default().with_audio_sample_rate(48_000.0);
 
     // Non-audio track / unknown id.
     assert!(m.set_sound_description_v2(vid, ok).is_err());
     assert!(m.set_sound_description_v2(99, ok).is_err());
     // Rate must be finite and positive.
     for bad in [0.0, -48_000.0, f64::NAN, f64::INFINITY] {
-        assert!(m
-            .set_sound_description_v2(
-                aud,
-                AudioEntryV2 {
-                    audio_sample_rate: bad,
-                    ..AudioEntryV2::default()
-                },
-            )
-            .is_err());
+        assert!(
+            m.set_sound_description_v2(aud, AudioEntryV2::default().with_audio_sample_rate(bad),)
+                .is_err()
+        );
     }
     // Mutual exclusion, every ordering. v2 after v1:
     m.set_sound_description_v1(aud, SoundV1::default(), false)
@@ -262,22 +244,22 @@ fn v2_validation_and_mutual_exclusion() {
     let mut m2 = MovMuxer::new();
     let aud2 = add_audio(&mut m2, *b"lpcm", 2, &[]);
     m2.set_sound_description_v2(aud2, ok).unwrap();
-    assert!(m2
-        .set_sound_description_v1(aud2, SoundV1::default(), false)
-        .is_err());
-    assert!(m2
-        .set_audio_entry_v1(aud2, AudioEntryV1::default())
-        .is_err());
+    assert!(
+        m2.set_sound_description_v1(aud2, SoundV1::default(), false)
+            .is_err()
+    );
+    assert!(
+        m2.set_audio_entry_v1(aud2, AudioEntryV1::default())
+            .is_err()
+    );
     // Re-setting v2 itself is allowed (idempotent reconfiguration).
-    assert!(m2
-        .set_sound_description_v2(
+    assert!(
+        m2.set_sound_description_v2(
             aud2,
-            AudioEntryV2 {
-                audio_sample_rate: 96_000.0,
-                ..AudioEntryV2::default()
-            },
+            AudioEntryV2::default().with_audio_sample_rate(96_000.0),
         )
-        .is_ok());
+        .is_ok()
+    );
     // v2 after ISO-v1:
     let mut m3 = MovMuxer::new();
     let aud3 = add_audio(&mut m3, *b"lpcm", 2, &[]);
@@ -298,10 +280,7 @@ fn hostile_giant_stsz_sample_size_errors_without_alloc() {
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(
         tid,
-        AudioEntryV2 {
-            audio_sample_rate: 192_000.0,
-            ..AudioEntryV2::default()
-        },
+        AudioEntryV2::default().with_audio_sample_rate(192_000.0),
     )
     .unwrap();
     let mut bytes = m.encode_to_vec().unwrap();
@@ -341,10 +320,7 @@ fn hostile_giant_stsz_sample_count_rejected_at_open() {
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(
         tid,
-        AudioEntryV2 {
-            audio_sample_rate: 48_000.0,
-            ..AudioEntryV2::default()
-        },
+        AudioEntryV2::default().with_audio_sample_rate(48_000.0),
     )
     .unwrap();
     let mut bytes = m.encode_to_vec().unwrap();
@@ -374,10 +350,7 @@ fn v2_stsd_box_stays_version_0() {
     let tid = add_audio(&mut m, *b"lpcm", 2, &[]);
     m.set_sound_description_v2(
         tid,
-        AudioEntryV2 {
-            audio_sample_rate: 48_000.0,
-            ..AudioEntryV2::default()
-        },
+        AudioEntryV2::default().with_audio_sample_rate(48_000.0),
     )
     .unwrap();
     let bytes = m.encode_to_vec().unwrap();

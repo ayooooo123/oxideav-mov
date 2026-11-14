@@ -78,7 +78,7 @@ use oxideav_core::{Error, Result};
 #[cfg(not(feature = "registry"))]
 use crate::standalone::{Error, Result};
 
-use crate::atom::{read_atom_header, read_payload, AtomHeader, MAX_INMEMORY_ATOM_BODY};
+use crate::atom::{AtomHeader, MAX_INMEMORY_ATOM_BODY, read_atom_header, read_payload};
 
 /// QTFF p. 52 — track input atom FourCC `' in'`. The leading two
 /// bytes are 0x00 (NOT ASCII space): "note that the two leading
@@ -131,6 +131,7 @@ pub const K_TRACK_MODIFIER_TYPE_IMAGE: u32 = u32::from_be_bytes(*b"vide");
 /// well-formed `imap` whose `' ty'` carries an unrecognised identifier
 /// still parses and surfaces the raw value to callers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum InputTypeKind {
     /// `kTrackModifierTypeMatrix` (Table 2-3 value 1).
     Matrix,

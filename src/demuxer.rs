@@ -12,47 +12,47 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::atom::{
-    read_atom_header, read_payload, walk_children, AtomHeader, CLEF, CLIP, CMOV, CO64, CSGP, CSLG,
-    CTAB, CTTS, DINF, DREF, EDTS, ELNG, ELST, ENOF, FREE, FTYP, GMHD, GMIN, HDLR, HMHD, IMAP, LOAD,
-    MATT, MAX_INMEMORY_ATOM_BODY, MDAT, MDHD, MDIA, META, MFRA, MINF, MOOF, MOOV, MVEX, MVHD, NMHD,
-    PADB, PDIN, PNOT, PRFT, PROF, RDRF, RMCD, RMCS, RMDA, RMDR, RMQU, RMRA, RMVC, SAIO, SAIZ, SBGP,
-    SDTP, SGPD, SIDX, SKIP, SMHD, SSIX, STBL, STCO, STDP, STHD, STSC, STSD, STSH, STSS, STSZ, STTS,
-    STYP, STZ2, SUBS, TAPT, TEXT, TKHD, TMCD, TRAK, TREF, TRGR, UDTA, UUID, VMHD, WIDE,
+    AtomHeader, CLEF, CLIP, CMOV, CO64, CSGP, CSLG, CTAB, CTTS, DINF, DREF, EDTS, ELNG, ELST, ENOF,
+    FREE, FTYP, GMHD, GMIN, HDLR, HMHD, IMAP, LOAD, MATT, MAX_INMEMORY_ATOM_BODY, MDAT, MDHD, MDIA,
+    META, MFRA, MINF, MOOF, MOOV, MVEX, MVHD, NMHD, PADB, PDIN, PNOT, PRFT, PROF, RDRF, RMCD, RMCS,
+    RMDA, RMDR, RMQU, RMRA, RMVC, SAIO, SAIZ, SBGP, SDTP, SGPD, SIDX, SKIP, SMHD, SSIX, STBL, STCO,
+    STDP, STHD, STSC, STSD, STSH, STSS, STSZ, STTS, STYP, STZ2, SUBS, TAPT, TEXT, TKHD, TMCD, TRAK,
+    TREF, TRGR, UDTA, UUID, VMHD, WIDE, read_atom_header, read_payload, walk_children,
 };
-use crate::chapter::{decode_text_sample_full, ChapterEntry, ChapterList};
-use crate::clip::{parse_clip, Clipping};
+use crate::chapter::{ChapterEntry, ChapterList, decode_text_sample_full};
+use crate::clip::{Clipping, parse_clip};
 use crate::cmov::parse_cmov;
-use crate::ctab::{parse_ctab, Ctab};
+use crate::ctab::{Ctab, parse_ctab};
 use crate::edit::parse_elst_full;
-use crate::fragment::{parse_mfra, parse_mvex, resolve_traf_samples, Mehd, Tfra, TrexDefaults};
-use crate::gmhd::{parse_gmin, parse_tcmi, parse_text_header, Gmhd};
+use crate::fragment::{Mehd, Tfra, TrexDefaults, parse_mfra, parse_mvex, resolve_traf_samples};
+use crate::gmhd::{Gmhd, parse_gmin, parse_tcmi, parse_text_header};
 use crate::header::{
-    parse_elng, parse_ftyp, parse_hdlr, parse_hmhd, parse_mdhd, parse_mvhd, parse_tkhd, Ftyp,
-    MediaHeaderKind, Mvhd,
+    Ftyp, MediaHeaderKind, Mvhd, parse_elng, parse_ftyp, parse_hdlr, parse_hmhd, parse_mdhd,
+    parse_mvhd, parse_tkhd,
 };
 use crate::leva::Leva;
 use crate::matte::parse_matt;
-use crate::media_meta::{parse_cslg, parse_tapt_dims, MetaKeyValue, Tapt};
-use crate::pdin::{parse_pdin, Pdin};
-use crate::pnot::{parse_pnot, Pnot};
-use crate::prft::{parse_prft, Prft};
-use crate::qt_metadata::{parse_qt_metadata, QtMetadata};
-use crate::reference::{parse_dref, parse_rdrf, ReferenceMovie};
+use crate::media_meta::{MetaKeyValue, Tapt, parse_cslg, parse_tapt_dims};
+use crate::pdin::{Pdin, parse_pdin};
+use crate::pnot::{Pnot, parse_pnot};
+use crate::prft::{Prft, parse_prft};
+use crate::qt_metadata::{QtMetadata, parse_qt_metadata};
+use crate::reference::{ReferenceMovie, parse_dref, parse_rdrf};
 use crate::sample_aux::{parse_saio, parse_saiz};
 use crate::sample_groups::{parse_csgp, parse_sbgp, parse_sgpd};
 use crate::sample_table::{
-    parse_co64, parse_ctts, parse_padb, parse_sdtp, parse_stco, parse_stdp, parse_stsc, parse_stsh,
-    parse_stss, parse_stsz, parse_stts, parse_stz2, parse_subs, SampleEntry, SampleSizeSource,
-    SampleTable, SubSampleInfo,
+    SampleEntry, SampleSizeSource, SampleTable, SubSampleInfo, parse_co64, parse_ctts, parse_padb,
+    parse_sdtp, parse_stco, parse_stdp, parse_stsc, parse_stsh, parse_stss, parse_stsz, parse_stts,
+    parse_stz2, parse_subs,
 };
-use crate::sidx::{parse_sidx, Sidx};
-use crate::ssix::{parse_ssix, Ssix};
-use crate::styp::{parse_styp, Styp};
+use crate::sidx::{Sidx, parse_sidx};
+use crate::ssix::{Ssix, parse_ssix};
+use crate::styp::{Styp, parse_styp};
 use crate::timecode::{StartTimecode, TimecodeSample};
-use crate::track::{parse_stsd, Track, TrackRef, TrackRefKind};
+use crate::track::{Track, TrackRef, TrackRefKind, parse_stsd};
 use crate::track_load::parse_load;
-use crate::user_data::{parse_udta, UserDataEntry};
-use crate::uuid::{parse_uuid, Uuid};
+use crate::user_data::{UserDataEntry, parse_udta};
+use crate::uuid::{Uuid, parse_uuid};
 
 #[cfg(feature = "registry")]
 use oxideav_core::{
@@ -74,6 +74,7 @@ pub const MAX_ALIAS_DEPTH: usize = 4;
 /// Round-1 demuxer. Lifetime is bounded by the input reader; on
 /// `open` we walk `moov` once and cache enough state to stream
 /// packets without reseeking the index.
+#[non_exhaustive]
 pub struct MovDemuxer {
     input: Box<dyn ReadSeek>,
     pub ftyp: Option<Ftyp>,
@@ -1048,7 +1049,7 @@ impl MovDemuxer {
         // (only when the registry feature is on). The resolved
         // `CodecId` is stored alongside the per-track stream record.
         #[cfg(feature = "registry")]
-        let streams = build_streams(&tracks, resolver);
+        let mut streams = build_streams(&tracks, resolver);
 
         // Tfra-driven keyframe back-patch: a common fragmented writer
         // emits a `tfra` entry per per-moof-leading sample but
@@ -1154,6 +1155,8 @@ impl MovDemuxer {
         #[cfg(feature = "registry")]
         let shifts: Vec<i64> = tracks.iter().map(|t| crate::audio_trim::shift(t, movie_timescale)).collect();
         samples.sort_by_key(|(_, s)| s.offset);
+        #[cfg(feature = "registry")]
+        fill_params_from_samples(&mut streams, &tracks, &samples, input.as_mut())?;
 
         // Touch the resolver to silence unused warnings on the
         // standalone build path.
@@ -1358,12 +1361,12 @@ impl MovDemuxer {
             None => return Err(Error::invalid("MOV: chapter primary index out of range")),
         };
         // Refuse self-reference.
-        if let Some(primary) = self.tracks.get(primary_track_index) {
-            if primary.tkhd.track_id == chap_track_id {
-                return Err(Error::invalid(
-                    "MOV: chapter track-id points at the primary track (cycle)",
-                ));
-            }
+        if let Some(primary) = self.tracks.get(primary_track_index)
+            && primary.tkhd.track_id == chap_track_id
+        {
+            return Err(Error::invalid(
+                "MOV: chapter track-id points at the primary track (cycle)",
+            ));
         }
         // Resolve track-id → track-index.
         let chap_index = self
@@ -2157,10 +2160,10 @@ impl MovDemuxer {
         let mut by_group: std::collections::BTreeMap<i32, Vec<usize>> =
             std::collections::BTreeMap::new();
         for (idx, t) in self.tracks.iter().enumerate() {
-            if let Some(ts) = t.track_selection() {
-                if ts.switch_group != 0 {
-                    by_group.entry(ts.switch_group).or_default().push(idx);
-                }
+            if let Some(ts) = t.track_selection()
+                && ts.switch_group != 0
+            {
+                by_group.entry(ts.switch_group).or_default().push(idx);
             }
         }
         by_group.into_iter().collect()
@@ -2783,10 +2786,10 @@ impl MovDemuxer {
             // With discard emission on, a never-presented sample IS
             // the next packet — honour the "next packet's dts equals
             // this" contract with its extrapolated timing.
-            if self.emit_never_presented {
-                if let Some(t) = self.never_presented_timing_for(stream_index as usize, s) {
-                    return Ok(t.dts);
-                }
+            if self.emit_never_presented
+                && let Some(t) = self.never_presented_timing_for(stream_index as usize, s)
+            {
+                return Ok(t.dts);
             }
         }
         // Every remaining sample is dropped by the edit list; the
@@ -2852,7 +2855,7 @@ impl MovDemuxer {
             match seg.kind {
                 crate::EditSegmentKind::Empty => continue,
                 crate::EditSegmentKind::Dwell { media_time } => {
-                    return crate::edit::sat_i64(media_time as i128)
+                    return crate::edit::sat_i64(media_time as i128);
                 }
                 crate::EditSegmentKind::Media {
                     media_time_start,
@@ -2869,7 +2872,7 @@ impl MovDemuxer {
             match seg.kind {
                 crate::EditSegmentKind::Empty => continue,
                 crate::EditSegmentKind::Dwell { media_time } => {
-                    return crate::edit::sat_i64(media_time as i128)
+                    return crate::edit::sat_i64(media_time as i128);
                 }
                 crate::EditSegmentKind::Media {
                     media_time_start,
@@ -3283,25 +3286,25 @@ pub fn dref_file_opener(
             DataReference::Urn { .. } => {
                 return Err(unsupported(
                     "MOV: dref_file_opener: urn  reference carries no location".into(),
-                ))
+                ));
             }
             DataReference::Alias(_) | DataReference::Resource(_) => {
                 return Err(unsupported(
                     "MOV: dref_file_opener: Macintosh alias records are not resolvable \
                      from the QTFF spec alone; bring your own opener"
                         .into(),
-                ))
+                ));
             }
             DataReference::SelfRef => {
                 return Err(unsupported(
                     "MOV: dref_file_opener: self-reference reached the external opener".into(),
-                ))
+                ));
             }
             DataReference::Other(t, _) => {
                 return Err(unsupported(format!(
                     "MOV: dref_file_opener: unknown data-reference type {:?}",
                     String::from_utf8_lossy(t)
-                )))
+                )));
             }
         };
         // file:// (and legacy file:) URLs go through the absolute-path
@@ -3522,16 +3525,23 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
             let pcm = t.is_audio().then(|| t.sample_descriptions.first().and_then(crate::pcm_codec::pcm_codec_id)).flatten();
             if let Some(id) = pcm {
                 params.codec_id = CodecId::new(id);
-            } else if !subtitle {
-                if let Some(id) = resolver.resolve_tag(&ctx) {
-                    params.codec_id = id;
-                }
+            } else if !subtitle
+                && let Some(id) = resolver.resolve_tag(&ctx)
+            {
+                params.codec_id = id;
             }
             params = params.with_tag(tag);
             if t.is_audio() {
                 if let Some(desc) = t.sample_descriptions.first() {
-                    params.channels = Some(desc.channels);
-                    params.sample_rate = Some(desc.sample_rate);
+                    fill_audio_params(&mut params, desc);
+                    // The PCM pass ahead of the resolver already read the
+                    // format code, the entry's width and its `enda`
+                    // (FFmpeg's mov_codec_id); it keeps the id where the
+                    // two Table 4-7 readings differ (`raw ` at 16 bits is
+                    // signed 16-bit big-endian).
+                    if let Some(id) = crate::pcm_codec::pcm_codec_id(desc) {
+                        params.codec_id = CodecId::new(id);
+                    }
                     // AMR: 3GPP fixes the entry's channel count at 2 and
                     // need not carry the rate; FFmpeg's
                     // mov_finalize_stsd_codec forces mono and the AMR rate.
@@ -3540,39 +3550,56 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
                         "amr_wb" => (params.channels, params.sample_rate) = (Some(1), Some(16000)),
                         _ => {}
                     }
-                    // MPEG-4 audio (`mp4a`, QTFF p. 185 – 186): the
-                    // decoder configuration is the esds
-                    // DecoderSpecificInfo (the AudioSpecificConfig),
-                    // carried directly or inside the `wave` extension —
-                    // not the raw extension-area atoms.
-                    let dsi = desc
-                        .esds
-                        .as_deref()
-                        .or_else(|| desc.si_decompression_param.as_ref().and_then(|w| w.esds()))
-                        .and_then(crate::track::esds_decoder_specific_info);
-                    if let Some(dsi) = dsi {
-                        params.extradata = dsi;
-                    } else if !desc.extra.is_empty() {
-                        params.extradata = desc.extra.clone();
+                }
+            } else if t.is_video()
+                && let Some(desc) = t.sample_descriptions.first()
+            {
+                if desc.width != 0 {
+                    params.width = Some(desc.width as u32);
+                }
+                if desc.height != 0 {
+                    params.height = Some(desc.height as u32);
+                }
+            }
+            // The decoder configuration is the codec's configuration
+            // record (`avcC` / `hvcC` / `av1C` / `vpcC` / esds DSI /
+            // `dOps` / `dfLa` / `alac` / `dac3` / `dec3`, directly or
+            // inside the `wave` extension) — not the raw framed
+            // extension atoms. Descriptions without one keep the raw
+            // extension blob for codec crates that read it themselves.
+            if (t.is_video() || t.is_audio())
+                && let Some(desc) = t.sample_descriptions.first()
+            {
+                let mut record = crate::codec_config::config_record_from_extensions(&desc.extra);
+                if record.is_none() && t.is_video() {
+                    // `glbl` and the EVC / LCEVC / APVC / VVC records
+                    // (FFmpeg's mov_read_glbl takes any of them).
+                    record = crate::track::video_codec_config(&desc.extra);
+                }
+                if t.is_video()
+                    && let (Some(rec), Some(codec)) =
+                        (&record, crate::video_config::codec_for_format(&format))
+                {
+                    // The decoded-picture layout and output size the
+                    // configuration record states (the SPS cropping
+                    // window wins over a description that declares
+                    // the coded, macroblock-aligned size).
+                    params.pixel_format = crate::video_config::pixel_format_from_config(codec, rec);
+                    if let Some((w, h)) =
+                        crate::video_config::cropped_dimensions_from_config(codec, rec)
+                    {
+                        params.width = Some(w);
+                        params.height = Some(h);
                     }
                 }
-            } else if t.is_video() {
-                if let Some(desc) = t.sample_descriptions.first() {
-                    if desc.width != 0 {
-                        params.width = Some(desc.width as u32);
-                    }
-                    if desc.height != 0 {
-                        params.height = Some(desc.height as u32);
-                    }
-                    // The decoder configuration record (`avcC`, `hvcC`,
-                    // an `esds`'s DecoderSpecificInfo, ...), as FFmpeg's
-                    // mov demuxer reads it; an entry without one keeps its
-                    // extension area.
-                    if let Some(config) = crate::track::video_codec_config(&desc.extra) {
-                        params.extradata = config;
-                    } else if !desc.extra.is_empty() {
-                        params.extradata = desc.extra.clone();
-                    }
+                if let Some(rec) = record {
+                    params.extradata = rec;
+                } else if t.is_audio() && crate::audio_params::pcm_layout(desc).is_some() {
+                    // Uncompressed audio needs no decoder
+                    // configuration: its codec id and sample format
+                    // state the layout.
+                } else if !desc.extra.is_empty() {
+                    params.extradata = desc.extra.clone();
                 }
             } else if subtitle {
                 // The entry after its universal 16-byte header, as FFmpeg's
@@ -3599,6 +3626,180 @@ fn build_streams(tracks: &[Track], resolver: &dyn CodecResolver) -> Vec<StreamIn
         });
     }
     out
+}
+
+/// The audio stream facts a sound sample description states, each
+/// from the source the format code makes authoritative:
+///
+/// * uncompressed formats ([`crate::audio_params::pcm_layout`]) name
+///   their codec id (`pcm_s24le`, `pcm_f32be`, …) and sample format
+///   themselves — the layout depends on the description's version-1
+///   / version-2 fields and `wave` data, which a tag lookup cannot
+///   see, so it overrides the resolver;
+/// * compressed formats whose format code names one codec
+///   ([`crate::audio_params::compressed_codec_id`]) and `mp4a` with
+///   an ISO/IEC 14496-3 / 13818-7 object type fall back to that id
+///   when the resolver knows none;
+/// * an `mp4a` AudioSpecificConfig states the output sample rate and
+///   channel count (SBR / PS signalling included) and the speaker set
+///   of its `channelConfiguration`, overriding the description's
+///   fields; the `esds` `avgBitrate` is the nominal bit rate;
+/// * a `chan` atom naming a predefined layout states the channel
+///   layout when its count agrees.
+#[cfg(feature = "registry")]
+fn fill_audio_params(params: &mut CodecParameters, desc: &crate::track::SampleDescription) {
+    use crate::audio_params as ap;
+    params.channels = Some(desc.channels);
+    params.sample_rate = Some(desc.effective_sample_rate());
+    if let Some(layout) = ap::pcm_layout(desc) {
+        if let Some(id) = layout.codec_id() {
+            params.codec_id = CodecId::new(id);
+        }
+        params.sample_format = pcm_sample_format(&layout);
+    } else if params.codec_id.as_str() == "unknown"
+        && let Some(id) = ap::compressed_codec_id(&desc.format)
+    {
+        params.codec_id = CodecId::new(id);
+    }
+    let mut layout = None;
+    if &desc.format == b"mp4a"
+        && let Some(dcd) = ap::es_decoder_config(desc)
+    {
+        if params.codec_id.as_str() == "unknown"
+            && matches!(dcd.object_type_indication, 0x40 | 0x66..=0x68)
+        {
+            params.codec_id = CodecId::new("aac");
+        }
+        if dcd.avg_bitrate != 0 {
+            params.bit_rate = Some(u64::from(dcd.avg_bitrate));
+        }
+        if let Some(asc) = dcd.audio_specific_config() {
+            if let Some(rate) = asc.output_sample_rate() {
+                params.sample_rate = Some(rate);
+            }
+            if let Some(n) = asc.output_channels() {
+                params.channels = Some(n);
+            }
+            layout = if asc.parametric_stereo_upmix() {
+                Some(oxideav_core::ChannelLayout::Stereo)
+            } else {
+                ap::layout_for_channel_configuration(asc.channel_configuration)
+            };
+        }
+    }
+    if let Some(chan) = &desc.chan
+        && let Some(l) = ap::layout_for_chan(chan)
+    {
+        layout = Some(l);
+    }
+    params.channel_layout = layout.filter(|l| Some(l.channel_count()) == params.channels);
+}
+
+/// The core sample format of an uncompressed layout: the packed
+/// interleaved format of that width and kind (core formats name the
+/// in-memory layout; the wire byte order is the codec id's). `None`
+/// for widths core has no packed format for.
+#[cfg(feature = "registry")]
+fn pcm_sample_format(
+    layout: &crate::audio_params::PcmLayout,
+) -> Option<oxideav_core::SampleFormat> {
+    use oxideav_core::SampleFormat::*;
+    Some(match (layout.float, layout.signed, layout.bits) {
+        (true, _, 32) => F32,
+        (true, _, 64) => F64,
+        (false, false, 8) => U8,
+        (false, true, 8) => S8,
+        (false, true, 16) => S16,
+        (false, true, 24) => S24,
+        (false, true, 32) => S32,
+        _ => return None,
+    })
+}
+
+/// Stream parameters only the sample tables (or the samples
+/// themselves) state, filled once every moov and fragment sample is
+/// known:
+///
+/// * `frame_rate` of a video track whose samples all last the same
+///   (QTFF 2012-08-14 p. 70 `stts`, ISO/IEC 14496-12 §8.8.8 `trun`):
+///   one frame per duration, in the media time scale. The last sample
+///   in decoding order may differ — writers commonly trim it to the
+///   movie's end — and is not counted; varying durations leave it
+///   `None` (a variable-rate track has no nominal rate to declare).
+/// * `pixel_format` of a VP9 track, from the first frame's
+///   uncompressed header (`vpcC` is forwarded verbatim but not read).
+///   Only for tracks whose media lives in this file (every `dref`
+///   entry self-referencing).
+#[cfg(feature = "registry")]
+fn fill_params_from_samples(
+    streams: &mut [StreamInfo],
+    tracks: &[Track],
+    samples: &[(u32, SampleEntry)],
+    input: &mut dyn ReadSeek,
+) -> Result<()> {
+    for (i, (stream, t)) in streams.iter_mut().zip(tracks).enumerate() {
+        if !t.is_video() {
+            continue;
+        }
+        let track_samples = || {
+            samples
+                .iter()
+                .filter(move |(ti, _)| *ti as usize == i)
+                .map(|(_, s)| s)
+        };
+        let mut first: Option<&SampleEntry> = None;
+        let mut last: Option<&SampleEntry> = None;
+        for s in track_samples() {
+            if first.is_none_or(|f| s.dts < f.dts) {
+                first = Some(s);
+            }
+            if last.is_none_or(|l| s.dts >= l.dts) {
+                last = Some(s);
+            }
+        }
+        let (Some(first), Some(last)) = (first, last) else {
+            continue;
+        };
+        if stream.params.frame_rate.is_none() {
+            let mut delta: Option<u32> = None;
+            let mut constant = true;
+            for s in track_samples() {
+                if std::ptr::eq(s, last) && !std::ptr::eq(s, first) {
+                    continue;
+                }
+                match delta {
+                    None => delta = Some(s.duration),
+                    Some(d) if d == s.duration => {}
+                    Some(_) => {
+                        constant = false;
+                        break;
+                    }
+                }
+            }
+            let tb = stream.time_base.0;
+            if constant
+                && let Some(d) = delta
+                && d > 0
+                && tb.num > 0
+                && tb.den > 0
+                && let Some(n) = tb.num.checked_mul(i64::from(d))
+            {
+                stream.params.frame_rate = Some(oxideav_core::Rational::new(tb.den, n).reduced());
+            }
+        }
+        if t.primary_format() == Some(*b"vp09")
+            && stream.params.pixel_format.is_none()
+            && t.is_self_contained()
+            && first.size > 0
+        {
+            let mut head = vec![0u8; first.size.min(16) as usize];
+            input.seek(SeekFrom::Start(first.offset))?;
+            if input.read_exact(&mut head).is_ok() {
+                stream.params.pixel_format = crate::video_config::vp9_frame_pixel_format(&head);
+            }
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3965,25 +4166,25 @@ fn parse_trak<R: Read + Seek + ?Sized>(r: &mut R, hdr: &AtomHeader) -> Result<Tr
     // Cross-validate cslg against ctts when both are present. The ISO
     // BMFF guarantees ctts deltas fall inside [least, greatest] (§8.6.1.4);
     // a mismatch is suspicious so we surface it as `InvalidData`.
-    if let Some(c) = track.cslg {
-        if !track.sample_table.ctts.is_empty() {
-            let mut min = i64::MAX;
-            let mut max = i64::MIN;
-            for e in &track.sample_table.ctts {
-                let v = e.composition_offset as i64;
-                if v < min {
-                    min = v;
-                }
-                if v > max {
-                    max = v;
-                }
+    if let Some(c) = track.cslg
+        && !track.sample_table.ctts.is_empty()
+    {
+        let mut min = i64::MAX;
+        let mut max = i64::MIN;
+        for e in &track.sample_table.ctts {
+            let v = e.composition_offset as i64;
+            if v < min {
+                min = v;
             }
-            if min < c.least_decode_to_display_delta || max > c.greatest_decode_to_display_delta {
-                return Err(Error::invalid(format!(
-                    "MOV: ctts range [{min}, {max}] outside cslg [{}, {}]",
-                    c.least_decode_to_display_delta, c.greatest_decode_to_display_delta,
-                )));
+            if v > max {
+                max = v;
             }
+        }
+        if min < c.least_decode_to_display_delta || max > c.greatest_decode_to_display_delta {
+            return Err(Error::invalid(format!(
+                "MOV: ctts range [{min}, {max}] outside cslg [{}, {}]",
+                c.least_decode_to_display_delta, c.greatest_decode_to_display_delta,
+            )));
         }
     }
     Ok(track)
@@ -4014,7 +4215,7 @@ fn parse_tref<R: Read + Seek + ?Sized>(r: &mut R, hdr: &AtomHeader) -> Result<Ve
         // Each child's payload is a tightly-packed list of u32 track ids.
         let payload = read_payload(r, child)?;
         let mut ids = Vec::with_capacity(payload.len() / 4);
-        for chunk in payload.chunks_exact(4) {
+        for chunk in payload.as_chunks::<4>().0 {
             ids.push(u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
         }
         out.push(TrackRef {
@@ -4636,6 +4837,103 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    #[test]
+    fn pcm_codec_and_sample_format_follow_the_description() {
+        use crate::track::{LpcmFlags, SampleDescription, SoundV1, SoundV2, WaveChild};
+        use oxideav_core::SampleFormat::{self, *};
+        fn pcm(desc: &SampleDescription) -> Option<(&'static str, Option<SampleFormat>)> {
+            let l = crate::audio_params::pcm_layout(desc)?;
+            Some((l.codec_id()?, pcm_sample_format(&l)))
+        }
+        let desc = |format: &[u8; 4], bits: u16| SampleDescription {
+            format: *format,
+            bits_per_sample: bits,
+            ..Default::default()
+        };
+        assert_eq!(pcm(&desc(b"raw ", 8)), Some(("pcm_u8", Some(U8))));
+        assert_eq!(pcm(&desc(b"twos", 8)), Some(("pcm_s8", Some(S8))));
+        assert_eq!(pcm(&desc(b"twos", 16)), Some(("pcm_s16be", Some(S16))));
+        assert_eq!(pcm(&desc(b"sowt", 16)), Some(("pcm_s16le", Some(S16))));
+        assert_eq!(pcm(&desc(b"NONE", 8)), Some(("pcm_u8", Some(U8))));
+        assert_eq!(pcm(&desc(b"\0\0\0\0", 16)), Some(("pcm_s16be", Some(S16))));
+        assert_eq!(pcm(&desc(b"NONE", 12)), None);
+        assert_eq!(pcm(&desc(b"in24", 16)), Some(("pcm_s24be", Some(S24))));
+        assert_eq!(pcm(&desc(b"in32", 16)), Some(("pcm_s32be", Some(S32))));
+        assert_eq!(pcm(&desc(b"fl32", 16)), Some(("pcm_f32be", Some(F32))));
+        assert_eq!(pcm(&desc(b"fl64", 16)), Some(("pcm_f64be", Some(F64))));
+        assert_eq!(pcm(&desc(b"mp4a", 16)), None);
+        assert_eq!(pcm(&desc(b"ulaw", 16)), None);
+        // Version 1: bytesPerPacket replaces the sample size field.
+        let v1 = SampleDescription {
+            format: *b"sowt",
+            bits_per_sample: 16,
+            audio_version: 1,
+            sound_v1: Some(SoundV1 {
+                samples_per_packet: 1,
+                bytes_per_packet: 3,
+                bytes_per_frame: 6,
+                bytes_per_sample: 2,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(pcm(&v1), Some(("pcm_s24le", Some(S24))));
+        // The `wave` `enda` datum flips in24 / fl32 to little-endian.
+        let le = |format: &[u8; 4]| SampleDescription {
+            format: *format,
+            bits_per_sample: 16,
+            si_decompression_param: Some(crate::track::SiDecompressionParam {
+                children: vec![
+                    WaveChild::format(*format),
+                    WaveChild::new(*b"enda", vec![0, 1]),
+                ],
+                terminated: true,
+                non_atom_data: Vec::new(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(pcm(&le(b"in24")), Some(("pcm_s24le", Some(S24))));
+        assert_eq!(pcm(&le(b"fl32")), Some(("pcm_f32le", Some(F32))));
+        let lpcm = |flags: u32, bits: u32| SampleDescription {
+            format: *b"lpcm",
+            sound_v2: Some(SoundV2 {
+                const_bits_per_channel: bits,
+                format_specific_flags: LpcmFlags(flags),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let signed = LpcmFlags::IS_SIGNED_INTEGER | LpcmFlags::IS_PACKED;
+        assert_eq!(pcm(&lpcm(signed, 24)), Some(("pcm_s24le", Some(S24))));
+        assert_eq!(
+            pcm(&lpcm(signed | LpcmFlags::IS_BIG_ENDIAN, 16)),
+            Some(("pcm_s16be", Some(S16)))
+        );
+        assert_eq!(
+            pcm(&lpcm(LpcmFlags::IS_FLOAT, 64)),
+            Some(("pcm_f64le", Some(F64)))
+        );
+        assert_eq!(
+            pcm(&lpcm(LpcmFlags::IS_PACKED, 8)),
+            Some(("pcm_u8", Some(U8)))
+        );
+        assert_eq!(
+            pcm(&lpcm(LpcmFlags::IS_PACKED, 16)),
+            Some(("pcm_u16le", None))
+        );
+        assert_eq!(pcm(&lpcm(signed | LpcmFlags::IS_NON_INTERLEAVED, 16)), None);
+        assert_eq!(pcm(&lpcm(signed | (8 << 7), 32)), None);
+        assert_eq!(pcm(&lpcm(signed, 20)), None);
+        // 24-bit samples in 32-bit containers carry padding bits.
+        let mut padded = lpcm(signed, 24);
+        if let Some(v2) = padded.sound_v2.as_mut() {
+            v2.num_audio_channels = 2;
+            v2.const_bytes_per_audio_packet = 8;
+        }
+        assert_eq!(pcm(&padded), None);
+        // A version-0 `lpcm` has no flags to read.
+        assert_eq!(pcm(&desc(b"lpcm", 16)), None);
+    }
+
     /// Minimal demuxer-open round trip: a hand-built one-track,
     /// one-sample QTFF file with brand 'qt  '. The synthetic builder
     /// is shared with the integration test in `tests/synth_minimal_qt.rs`
@@ -4893,7 +5191,7 @@ mod tests {
         body.extend_from_slice(&0u32.to_be_bytes()); // first_offset
         body.extend_from_slice(&[0, 0]); // reserved
         body.extend_from_slice(&1u16.to_be_bytes()); // reference_count = 1
-                                                     // One media reference, starts with a SAP of type 1.
+        // One media reference, starts with a SAP of type 1.
         let w0 = 0x0000_1000u32; // reference_type=0, referenced_size=4096
         let w2 = (1u32 << 31) | (1u32 << 28); // starts_with_SAP=1, SAP_type=1
         body.extend_from_slice(&w0.to_be_bytes());

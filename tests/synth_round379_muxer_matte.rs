@@ -19,11 +19,12 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 
 fn video_track(m: &mut MovMuxer) -> u32 {
     let samples: Vec<MuxSample> = (0..3)
-        .map(|i| MuxSample {
-            data: vec![(i as u8).wrapping_add(1); 8],
-            duration: 100,
-            keyframe: i == 0,
-            composition_offset: 0,
+        .map(|i| {
+            MuxSample::default()
+                .with_data(vec![(i as u8).wrapping_add(1); 8])
+                .with_duration(100)
+                .with_keyframe(i == 0)
+                .with_composition_offset(0)
         })
         .collect();
     m.add_track(
@@ -48,7 +49,7 @@ fn image_description(fourcc: &[u8; 4], extra: usize) -> Vec<u8> {
     out.extend_from_slice(fourcc);
     out.extend_from_slice(&[0u8; 6]);
     out.extend_from_slice(&1u16.to_be_bytes());
-    out.extend(std::iter::repeat(0u8).take(extra));
+    out.extend(std::iter::repeat_n(0u8, extra));
     out
 }
 

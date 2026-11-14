@@ -45,6 +45,7 @@ pub const METADATA_HANDLER_MDTA: [u8; 4] = *b"mdta";
 /// Well-known value types (p. 143, Table 3-5). The type indicator's
 /// top byte selects the type set — only `0` (this table) is defined.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum WellKnownType {
     /// 0 — "Reserved for use where no type needs to be indicated".
     Reserved,
@@ -157,6 +158,7 @@ impl LocaleIndicator {
 
 /// A decoded value (see [`MetaValue::decode`]).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum DecodedValue {
     /// UTF-8 / UTF-16 text (types 1, 2, 4, 5).
     Text(String),
@@ -175,6 +177,7 @@ pub enum DecodedValue {
 
 /// One `data` value atom (p. 142): `[type:4][locale:4][value]`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetaValue {
     /// Raw 32-bit type indicator: top byte = type set (must be 0), low
     /// 24 bits = well-known type code.
@@ -235,11 +238,13 @@ impl MetaValue {
         Some(match self.well_known_type()? {
             W::Utf8 | W::Utf8Sort => DecodedValue::Text(std::str::from_utf8(v).ok()?.to_owned()),
             W::Utf16 | W::Utf16Sort => {
-                if v.len() % 2 != 0 {
+                if !v.len().is_multiple_of(2) {
                     return None;
                 }
                 let units: Vec<u16> = v
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|c| u16::from_be_bytes([c[0], c[1]]))
                     .collect();
                 DecodedValue::Text(String::from_utf16(&units).ok()?)
@@ -321,6 +326,7 @@ impl MetaKey {
 
 /// One `ilst` item (p. 138).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetaItem {
     /// The item atom's type, which "should be set equal to the index of
     /// the key" (1-based) in the `keys` atom. Preserved verbatim even
@@ -348,6 +354,7 @@ impl MetaItem {
 
 /// A parsed QuickTime metadata atom.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct QtMetadata {
     /// `hdlr` handler type (`mdta` per p. 130), when a handler atom is
     /// present.
@@ -577,10 +584,10 @@ fn parse_locale_lists(body: &[u8], what: &str) -> Result<Vec<Vec<u16>>> {
     // The worked examples (Table 3-1 / Table 3-2, `atom_size` 26)
     // omit the version/flags word the field lists mandate. Accept
     // that spelling only when it accounts for every byte of the body.
-    if let Ok((lists, consumed)) = parse_locale_lists_from(body, 0, what) {
-        if consumed == body.len() {
-            return Ok(lists);
-        }
+    if let Ok((lists, consumed)) = parse_locale_lists_from(body, 0, what)
+        && consumed == body.len()
+    {
+        return Ok(lists);
     }
     // Neither spelling fits: report against the normative one.
     parse_locale_lists_from(body, 4, what).map(|(l, _)| l)

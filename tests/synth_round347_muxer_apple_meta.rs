@@ -19,18 +19,19 @@ use std::io::Cursor;
 
 use oxideav_core::{Demuxer, ReadSeek};
 use oxideav_mov::{
-    MovDemuxer, MovMetaItem, MovMuxer, MuxSample, MuxTrackKind, META_NAMESPACE_MDTA,
-    META_TYPE_BE_SIGNED_INT, META_TYPE_RAW, META_TYPE_UTF8,
+    META_NAMESPACE_MDTA, META_TYPE_BE_SIGNED_INT, META_TYPE_RAW, META_TYPE_UTF8, MovDemuxer,
+    MovMetaItem, MovMuxer, MuxSample, MuxTrackKind,
 };
 
 /// One single-sample audio track, no metadata yet.
 fn one_audio_track(m: &mut MovMuxer) -> u32 {
-    let samples = vec![MuxSample {
-        data: vec![0x11u8; 8],
-        duration: 1024,
-        keyframe: true,
-        composition_offset: 0,
-    }];
+    let samples = vec![
+        MuxSample::default()
+            .with_data(vec![0x11u8; 8])
+            .with_duration(1024)
+            .with_keyframe(true)
+            .with_composition_offset(0),
+    ];
     m.add_track(
         MuxTrackKind::Audio {
             format: *b"sowt",

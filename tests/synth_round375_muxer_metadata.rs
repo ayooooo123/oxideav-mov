@@ -29,11 +29,12 @@ fn open(bytes: Vec<u8>) -> MovDemuxer {
 fn samples(payloads: &[&[u8]]) -> Vec<MuxSample> {
     payloads
         .iter()
-        .map(|p| MuxSample {
-            data: p.to_vec(),
-            duration: 100,
-            keyframe: true,
-            composition_offset: 0,
+        .map(|p| {
+            MuxSample::default()
+                .with_data(p.to_vec())
+                .with_duration(100)
+                .with_keyframe(true)
+                .with_composition_offset(0)
         })
         .collect()
 }
@@ -239,9 +240,10 @@ fn metadata_track_with_cdsc_reference_from_video() {
     assert!(d.tracks[1].hdlr.is_metadata());
     // The video track's cdsc reference resolves to the metadata track.
     let refs = &d.tracks[0].references;
-    assert!(refs
-        .iter()
-        .any(|r| r.fourcc == *b"cdsc" && r.track_ids.contains(&meta)));
+    assert!(
+        refs.iter()
+            .any(|r| r.fourcc == *b"cdsc" && r.track_ids.contains(&meta))
+    );
 }
 
 #[test]

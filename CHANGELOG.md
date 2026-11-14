@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SampleAuxStream::new(per_sample)`, `SampleToGroupWrite::new(grouping_type, indices)`
+  and `TrackReference::new(reference_type, track_ids)`.
+- `with_<field>` builder setters on the muxer input records `MuxSample`,
+  `ExternalSampleLocation`, `SampleAuxStream`, `SampleToGroupWrite`,
+  `SampleGroupDescriptionWrite`, `MuxEdit`, `AudioEntryV1`,
+  `AudioEntryV2`, `VisualExtensions`, `TrackReference`.
+- `MovDemuxer::ffmpeg_edit_lists`, on for the registry's `open`: edit
+  lists read as FFmpeg's mov demuxer reads the ones it applies as one
+  shift (leading empty edits, then one media edit at rate 1). Timestamps
+  move by the empty edits minus the edit's `media_time` (B-frame delay,
+  start delay), and audio packets carry the priming and end padding FFmpeg
+  removes from the decoded sound as `Demuxer::packet_metadata` trims, with
+  the skip a seek's landing packet needs (`src/audio_trim.rs`, LGPL port).
+  Other lists keep the media timeline; `MovDemuxer::open` is unchanged.
+  Requires the PearTube oxideav-core fork (`Demuxer::packet_metadata`).
+
+### Changed
+
+- `#[non_exhaustive]` on the muxer input records above; on the decoded
+  aggregates `MovDemuxer`, `Track`, `SampleDescription`, `SampleTable`,
+  `SampleEntry`, `QtMetadata`, `MetaItem`, `MetaValue`, `EditedTiming`,
+  `TrafParse`, `TrafRecord`, `ChapterList`, `TextSampleStyles`,
+  `ReferenceMovie`, `SubTrack`, `Gmhd`; and on the open-ended enums
+  `BrandClass`, `MediaHeaderKind`, `ColorParametersKind`,
+  `MetadataSampleEntry`, `SubtitleSampleEntry`, `MuxTrackKind`,
+  `DataReferenceWrite`, `FragmentationMode`, `ChunkStrategy`,
+  `MoovPlacement`, `WellKnownType`, `DecodedValue`, `DataReference`,
+  `TimecodeSample`, `TrackRefKind`, `TrafAddressing`, `InputTypeKind`,
+  `UserDataKind`, `GraphicsMode` and the standalone `Error`. The 1:1
+  box-layout records (`Mvhd`, `Tkhd`, `Elst`, `Tfhd`, `Sidx`, …) and
+  the fixed-field enums (`IsLeading`, `SampleDependsOn`,
+  `ReferenceType`, `TextJustification`, `FieldOrdering`, …) stay
+  exhaustive.
+
 ### Fixed
 
 - Linear PCM and G.711 sound entries play: the demuxer gives them the
@@ -47,17 +83,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry's channel count at 2, which made the AMR decoders expect two
   frames a packet and fail.
 
+## [0.0.7](https://github.com/OxideAV/oxideav-mov/compare/v0.0.6...v0.0.7) - 2026-11-05
+
+### Other
+
+- walk the audio stream-parameter surface; refresh the fuzz lock to core 0.1.42
+- truthful audio params — PCM codec ids, AAC AudioSpecificConfig, chan layouts; muxer writes them back
+- pixel_format / cropped size / frame_rate for video, sample_format for PCM
+- stream extradata is the codec configuration record (avcC/hvcC/av1C/vpcC/dOps/dfLa/alac/dac3/dec3), muxer frames it back
+- edition 2024, MSRV 1.95
+
+### Fixed
+
+- H.264 (and HEVC / AV1 / VP8 / VP9 / Opus / FLAC / ALAC / AC-3 /
+  E-AC-3) streams in a QuickTime movie now carry the codec's
+  configuration record as `CodecParameters::extradata` (`avcC` /
+  `hvcC` / `av1C` / `vpcC` / `dOps` / `dfLa` / `alac` / `dac3` /
+  `dec3`, directly or inside the `wave` extension) instead of the raw
+  framed extension atoms, so an H.264 `.mov` decodes (50/50 frames,
+  bit-exact vs ffmpeg on the corpus fixture) and remuxes to MKV.
+- The registry muxer frames bare configuration-record extradata back
+  into the format's configuration atom (AAC gets a minimal
+  ES_Descriptor `esds`), so `.mov` → `.mov` remux keeps the decoder
+  configuration; already-framed atom lists pass through unchanged.
+
 ### Added
 
-- `MovDemuxer::ffmpeg_edit_lists`, on for the registry's `open`: edit
-  lists read as FFmpeg's mov demuxer reads the ones it applies as one
-  shift (leading empty edits, then one media edit at rate 1). Timestamps
-  move by the empty edits minus the edit's `media_time` (B-frame delay,
-  start delay), and audio packets carry the priming and end padding FFmpeg
-  removes from the decoded sound as `Demuxer::packet_metadata` trims, with
-  the skip a seek's landing packet needs (`src/audio_trim.rs`, LGPL port).
-  Other lists keep the media timeline; `MovDemuxer::open` is unchanged.
-  Requires the PearTube oxideav-core fork (`Demuxer::packet_metadata`).
+- `codec_config` module: `config_record_from_extensions` and its
+  inverse `config_atom_for_format`.
+- Video streams declare `pixel_format` (H.264 from the `avcC` SPS or,
+  without one, the record's high-profile fields; HEVC from `hvcC`;
+  AV1 from `av1C`; VP9 from the first frame's uncompressed header),
+  the output size after the H.264 / HEVC SPS cropping window, and
+  `frame_rate` when every sample bar the last lasts the same
+  (`time_scale / duration`, reduced — 30000/1001, 25/1, …).
+- Uncompressed sound tracks declare `sample_format` from the sound
+  description (QTFF Table 4-7 `raw ` / `twos` / `sowt` / `in24` /
+  `in32` / `fl32` / `fl64`; version-2 `lpcm` format-specific flags).
+- Audio streams carry complete, truthful parameters
+  (`audio_params` module):
+  - PCM codec ids from the sound description instead of `unknown` —
+    `raw ` → `pcm_u8`, `twos` → `pcm_s8` / `pcm_s16be` (version-1
+    `bytesPerPacket` width), `sowt` → `pcm_s16le` …, `in24` / `in32`
+    / `fl32` / `fl64` big-endian unless the `wave` `enda` datum says
+    little-endian, version-2 `lpcm` from its float / big-endian /
+    signed flags (padded containers, fixed-point and non-interleaved
+    layouts stay undescribed); `ulaw` / `alaw` / `ima4` / the
+    Microsoft ACM ADPCM codes / `.mp3` / `ac-3` / `alac` name their
+    codec when the resolver knows none. 31 fixtures match `ffprobe`.
+  - `mp4a`: the `esds` AudioSpecificConfig (ISO/IEC 14496-3 Table
+    1.19, GASpecificConfig, program_config_element, hierarchical and
+    backward-compatible SBR / PS signalling) gives the output sample
+    rate (the SBR rate for HE-AAC), channel count (two for a PS /
+    implicit-PS mono stream, the PCE's speakers for configuration 0)
+    and the `channelConfiguration` layout; `avgBitrate` is the
+    `bit_rate`. Extradata stays the AudioSpecificConfig.
+  - `chan` atoms naming a predefined layout tag set `channel_layout`
+    (orders core cannot name give `DiscreteN`).
+  - New public `AudioSpecificConfig`, `ProgramConfig`,
+    `EsDecoderConfig`, `PcmLayout`, `pcm_layout`, `es_decoder_config`.
+
+### Changed
+
+- edition 2024, MSRV 1.95
+- Uncompressed audio streams no longer forward the raw extension
+  atoms as extradata — the codec id and sample format state the
+  layout.
+- The registry muxer writes the audio facts back: 8 / 16-bit PCM in
+  one or two channels keeps `raw ` / `twos` / `sowt` with the true
+  sample size (was always 16), every other PCM layout becomes a
+  version-2 `lpcm` description with matching flags, other codecs
+  with more than two channels or a rate past 65535 Hz use the
+  version-2 layout, and a stream channel layout with a predefined tag
+  is written as a `chan` atom. Demux → mux → demux keeps codec id,
+  rate, channels, layout, sample format and extradata on 20 fixtures.
 
 ## [0.0.6](https://github.com/OxideAV/oxideav-mov/compare/v0.0.5...v0.0.6) - 2026-10-04
 

@@ -30,6 +30,29 @@ Decoding stays in codec crates: this crate calls
   selection / current time fields), per-track `tkhd` / `mdia`
   (`mdhd`, `hdlr`) / `minf/stbl`, plus the QuickTime `clip` / `crgn`,
   `matt` / `kmat`, `load`, `imap`, and Color Table atoms.
+- Stream `extradata` is the codec's configuration record, not the raw
+  sample-description extension atoms: `avcC` / `hvcC` / `av1C` bodies,
+  the `vpcC` body (with its FullBox word), the `esds`
+  DecoderSpecificInfo, `OpusHead` + the `dOps` body, the `dfLa` / `alac`
+  bodies after their FullBox word, and `dac3` / `dec3` verbatim — found
+  directly or inside a `wave` extension. The registry muxer frames it
+  back (`config_atom_for_format`), so demux → mux → demux is byte-exact.
+- Stream parameters state what the decoder will emit: video
+  `pixel_format` from `avcC` / `hvcC` / `av1C` (and for VP9 the first
+  frame's uncompressed header), `width` / `height` reduced by the
+  H.264 / HEVC SPS cropping window, `frame_rate` when every sample (the
+  last aside) has the same duration; uncompressed-audio
+  `sample_format` from the sound description (`raw ` / `twos` / `sowt`
+  / `in24` / `in32` / `fl32` / `fl64`, version-2 `lpcm` flags).
+- Audio stream parameters come from the source the format makes
+  authoritative: PCM codec ids (`pcm_s24le`, `pcm_f32be`, …) from the
+  format code, version-1 / version-2 fields and the `wave` byte-order
+  datum; for `mp4a` the AudioSpecificConfig's output rate, channel
+  count and layout (SBR / PS signalling, program config elements) —
+  not the sound description's core-rate / mono fields; `chan`
+  predefined layout tags as `channel_layout`. The registry muxer
+  writes the same facts back (`lpcm` version 2 for wide / little-endian
+  / multichannel PCM, `chan` atoms).
 - Sample tables: `stsd`, `stts`, `stsc`, `stsz` / `stz2` (compact),
   `stco` / `co64`, `stss`, `stsh` (shadow sync), `sdtp`, `stdp`,
   `padb`, `subs` (sub-samples), `saiz` / `saio` (sample-aux), and

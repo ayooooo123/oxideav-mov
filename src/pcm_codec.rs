@@ -54,10 +54,10 @@ pub(crate) fn pcm_codec_id(desc: &SampleDescription) -> Option<&'static str> {
         },
         _ => return None,
     };
-    if &desc.format == b"lpcm" {
-        if let Some(v2) = &desc.sound_v2 {
-            id = lpcm_codec_id(v2.const_bits_per_channel, v2.format_specific_flags.0)?;
-        }
+    if &desc.format == b"lpcm"
+        && let Some(v2) = &desc.sound_v2
+    {
+        id = lpcm_codec_id(v2.const_bits_per_channel, v2.format_specific_flags.0)?;
     }
     id = match (id, bits) {
         ("pcm_s8" | "pcm_u8", 16) => "pcm_s16be",
@@ -113,10 +113,10 @@ fn lpcm_codec_id(bits: u32, flags: u32) -> Option<&'static str> {
 /// atom or among its extension atoms.
 fn little_endian(desc: &SampleDescription) -> bool {
     let is_little = |payload: &[u8]| payload.get(1) == Some(&1);
-    if let Some(wave) = &desc.si_decompression_param {
-        if wave.child(b"enda").is_some_and(is_little) {
-            return true;
-        }
+    if let Some(wave) = &desc.si_decompression_param
+        && wave.child(b"enda").is_some_and(is_little)
+    {
+        return true;
     }
     let mut extra = desc.extra.as_slice();
     while extra.len() >= 8 {

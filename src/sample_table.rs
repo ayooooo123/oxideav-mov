@@ -311,6 +311,7 @@ pub enum SampleSizeSource {
 
 /// Parsed sample table for a single track.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct SampleTable {
     pub stts: Vec<SttsEntry>,
     pub stsc: Vec<StscEntry>,
@@ -408,6 +409,7 @@ pub struct SampleTable {
 /// One entry in the iterator output: enough to read the sample bytes
 /// from the input stream.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct SampleEntry {
     /// 0-based sample index inside the track.
     pub index: u32,
@@ -868,10 +870,10 @@ pub fn parse_stsc(payload: &[u8]) -> Result<Vec<StscEntry>> {
             ));
         }
     }
-    if let Some(first) = out.first() {
-        if first.first_chunk != 1 {
-            return Err(Error::invalid("MOV: stsc first entry's first_chunk != 1"));
-        }
+    if let Some(first) = out.first()
+        && first.first_chunk != 1
+    {
+        return Err(Error::invalid("MOV: stsc first entry's first_chunk != 1"));
     }
     Ok(out)
 }
@@ -1488,7 +1490,7 @@ impl Iterator for SampleIter<'_> {
             None => {
                 return Some(Err(Error::invalid(
                     "MOV: sample index past end of stsz table",
-                )))
+                )));
             }
         };
         // Verify chunk pointer is valid.

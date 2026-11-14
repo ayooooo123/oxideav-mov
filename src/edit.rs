@@ -355,14 +355,14 @@ pub fn resolve_edit_segments(edits: &EditList, movie_duration: Option<u64>) -> V
         cursor = end;
     }
     // Implicit trailing empty edit per QTFF p. 47 / §8.6.6.3.
-    if let Some(total) = movie_duration {
-        if cursor < total {
-            out.push(EditSegment {
-                movie_time_start: cursor,
-                movie_time_end: total,
-                kind: EditSegmentKind::Empty,
-            });
-        }
+    if let Some(total) = movie_duration
+        && cursor < total
+    {
+        out.push(EditSegment {
+            movie_time_start: cursor,
+            movie_time_end: total,
+            kind: EditSegmentKind::Empty,
+        });
     }
     out
 }
@@ -607,6 +607,7 @@ pub fn movie_pts_to_media_pts(
 /// origin is the movie timeline's origin (movie time 0), rescaled from
 /// movie- to media-timescale ticks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct EditedTiming {
     /// Presentation timestamp on the edited timeline.
     pub pts: i64,

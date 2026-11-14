@@ -38,10 +38,10 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::atom::{
-    read_payload, walk_children, AtomHeader, LEVA, MEHD, MFRO, SAIO, SAIZ, TFRA, TRAF, TREX,
+    AtomHeader, LEVA, MEHD, MFRO, SAIO, SAIZ, TFRA, TRAF, TREX, read_payload, walk_children,
 };
-use crate::leva::{parse_leva, Leva};
-use crate::sample_aux::{parse_saio, parse_saiz, Saio, Saiz};
+use crate::leva::{Leva, parse_leva};
+use crate::sample_aux::{Saio, Saiz, parse_saio, parse_saiz};
 use crate::sample_table::SampleEntry;
 
 #[cfg(feature = "registry")]
@@ -188,6 +188,7 @@ pub struct Tfhd {
 ///   same data-reference (i.e., the data for these tracks must be in
 ///   the same file)".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TrafAddressing {
     /// `base-data-offset-present` (`0x000001`): the explicit
     /// `base_data_offset` field anchors the track runs.
@@ -688,6 +689,7 @@ pub fn parse_traf<R: Read + Seek + ?Sized>(r: &mut R, hdr: &AtomHeader) -> Resul
 /// `saiz` / `saio` sample-auxiliary-information boxes living at
 /// `traf` scope (§8.7.8.1 / §8.7.9.1).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TrafParse {
     /// Mandatory `tfhd` (§8.8.7) — only `None` when the `traf` is
     /// malformed (the demuxer treats `None` as "skip this fragment").
@@ -797,6 +799,7 @@ pub fn parse_moof<R: Read + Seek + ?Sized>(
 
 /// One parsed `traf` row.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TrafRecord {
     /// The mandatory `tfhd` defaults.
     pub tfhd: Tfhd,
@@ -1547,7 +1550,7 @@ mod tests {
         let mut p = Vec::new();
         p.extend_from_slice(&TFHD_BASE_DATA_OFFSET_PRESENT.to_be_bytes());
         p.extend_from_slice(&1u32.to_be_bytes()); // track_id
-                                                  // Missing 8-byte base_data_offset
+        // Missing 8-byte base_data_offset
         assert!(parse_tfhd(&p).is_err());
     }
 
@@ -1594,7 +1597,7 @@ mod tests {
         p.extend_from_slice(&1u32.to_be_bytes()); // track_id
         p.extend_from_slice(&0u32.to_be_bytes()); // length_size word (all 1 byte)
         p.extend_from_slice(&2u32.to_be_bytes()); // n
-                                                  // entry 0
+        // entry 0
         p.extend_from_slice(&1u64.to_be_bytes()); // time
         p.extend_from_slice(&100u64.to_be_bytes()); // moof_offset
         p.extend_from_slice(&[1, 1, 1]);
